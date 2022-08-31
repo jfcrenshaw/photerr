@@ -77,22 +77,29 @@ To see a list and explanation of these arguments, see the docstring for `ErrorPa
 #### *The point source model*
 
 To derive the [Ivezic (2019)](https://arxiv.org/abs/0805.2366) error model, we start with the noise-to-signal ratio (NSR) for an object with photon count $C$ and background noise $N_0$ (which depends on seeing, read-out noise, etc.):
+
 $$
-\text{NSR}^2 = \frac{N_0^2 + C}{C^2}.
-$$
-If we define $C = C_5$ when $\text{NSR} = 1/5$, then we can solve for $N_0$ and write
-$$
-\text{NSR}^2 = \frac{1}{C_5} \left( \frac{C_5}{C} \right) + \left[ \left( \frac{1}{5} \right)^2 - \frac{1}{C_5} \right] \left( \frac{C_5}{C} \right)^2.
-$$
-Defining $x = \frac{C_5}{C} = 10 ^{\, (m - m_5) \, / \, 2.5}$ and $\gamma = \left( \frac{1}{5} \right)^2 - \frac{1}{C_5}$, we have
-$$
-\text{NSR}^2 = (0.04 - \gamma) x + \gamma \, x^2 ~~ (\text{mag}^2).
+NSR^2 = \frac{N_0^2 + C}{C^2}.
 $$
 
-In the high signal-to-noise ratio (SNR) limit, $\text{NSR} \ll 1$, and we can approximate
+If we define $C = C_5$ when $NSR = 1/5$, then we can solve for $N_0$ and write
+
 $$
-\sigma_\text{rand} = 2.5 \log_{10}\left( 1 + \text{NSR} \right) \approx \text{NSR}.
+NSR^2 = \frac{1}{C_5} \left( \frac{C_5}{C} \right) + \left[ \left( \frac{1}{5} \right)^2 - \frac{1}{C_5} \right] \left( \frac{C_5}{C} \right)^2.
 $$
+
+Defining $x = \frac{C_5}{C} = 10 ^{(m - m_5) / 2.5}$ and $\gamma = \left( \frac{1}{5} \right)^2 - \frac{1}{C_5}$, we have
+
+$$
+NSR^2 = (0.04 - \gamma) x + \gamma x^2 ~~ (\text{mag}^2).
+$$
+
+In the high signal-to-noise ratio (SNR) limit, $NSR \ll 1$, and we can approximate
+
+$$
+\sigma_\text{rand} = 2.5 \log_{10}\left( 1 + NSR \right) \approx NSR.
+$$
+
 This approximation yields Equation 5 from [Ivezic (2019)](https://arxiv.org/abs/0805.2366).
 In PhotErr, we do not make this approximation so that the error model generalizes to the low SNR regime.
 In addition, while the high-SNR model assumes photometric errors are Gaussian in magnitude space, we model errors as Gaussian in flux space.
@@ -111,20 +118,24 @@ This behavior can be disabled by setting `decorrelate=False`.
 
 The [Ivezic (2019)](https://arxiv.org/abs/0805.2366) model calculates errors for point sources.
 To model errors for extended sources, we use Equation 5 from [van den Busch (2020)](http://arxiv.org/abs/2007.01846):
+
 $$
-\text{NSR}_\text{\, ext} \propto
-\text{NSR}_\text{\, pt} \, \sqrt{\frac{A_\text{ap}}{A_\text{psf}}},
+NSR_\text{ext} \propto
+NSR_\text{pt} \sqrt{\frac{A_\text{ap}}{A_\text{psf}}},
 $$
+
 where $A_\text{ap}$ is the area of the source aperture, and $A_\text{psf}$ is the area of the PSF.
 We set the proportionality constant to unity, so that when $A_\text{ap} \to A_\text{psf}$, we recover the error for a point source.
 
-We include two different models for calculating the aperture area. The "auto" method from [van den Busch (2020)](http://arxiv.org/abs/2007.01846) calculates the semi-major and -minor axes of the aperture ($a_\text{ap}$ and $b_\text{ap}$) from the semi-major and -minor axes of the galaxy ($a_\text{gal}$ and $b_\text{gal}$, corresponding to half-light radii):
+We include two different models for calculating the aperture area. The "auto" method from [van den Busch (2020)](http://arxiv.org/abs/2007.01846) calculates the semi-major and -minor axes of the aperture ( $a_\text{ap}$ and $b_\text{ap}$) from the semi-major and -minor axes of the galaxy ( $a_\text{gal}$ and $b_\text{gal}$, corresponding to half-light radii):
+
 $$
-a_\text{ap} = \sqrt{\sigma_\text{psf}^2 + (2.5 \, a_\text{gal})^2},
+a_\text{ap} = \sqrt{\sigma_\text{psf}^2 + (2.5 a_\text{gal})^2},
 \quad
-b_\text{ap} = \sqrt{\sigma_\text{psf}^2 + (2.5 \, b_\text{gal})^2},
+b_\text{ap} = \sqrt{\sigma_\text{psf}^2 + (2.5 b_\text{gal})^2},
 $$
-where $\sigma_\text{psf} = \text{FWHM}_\text{psf} \, / \, 2.355$ is the PSF standard deviation.
+
+where $\sigma\_\text{psf} = \text{FWHM}\_\text{psf} / 2.355$ is the PSF standard deviation.
 The formula for the area of an ellipse is then used to calculate the aperture area: $A_\text{ap} = \pi a_\text{ap} b_\text{ap}$.
 
 The "gaap" method for extended sources ([Kuijken 2019](https://arxiv.org/abs/1902.11265)) is nearly identical, except that it adds a minimum aperture diameter in quadrature when calculating $a_\text{ap}$ and $b_\text{ap}$, and then clips aperture diameters above a certain maximum.
