@@ -24,8 +24,13 @@ errModel = LsstErrorModel()
 catalog_with_errors = errModel(catalog, random_state=42)
 ```
 
-This uses all of the default settings for the LSST model, which includes 10 years of observations.
-If instead, you want to calculate errors for LSST year 1, you can pass the `nYrObs` argument to the constructor:
+The error model expects an input catalog in the form of a pandas DataFrame, and it returns another DataFrame containing all of the original information, except with photometric errors applied (note that if compatibility with Astropy Tables, Ordered Dictionaries, etc would be useful to you, let me know!).
+
+
+## Tweaking the error model
+
+The example above uses the default settings for the LSST model, which includes 10 years of observing time.
+If instead you want to calculate errors for LSST year 1, you can pass the `nYrObs` argument to the constructor:
 
 ```python
 errModel = LsstErrorModel(nYrObs=1)
