@@ -1,8 +1,10 @@
 [tool.poetry]
 name = "photerr"
-version = "0.1.0"
-description = ""
+version = "0.1.1"
+description = "Photometric error model for astronomical imaging surveys"
 authors = ["John Franklin Crenshaw <jfcrenshaw@gmail.com>"]
+readme = "README.md"
+homepage = "https://github.com/jfcrenshaw/photerr"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<4.0"
