@@ -1,0 +1,139 @@
+
+# PhotErr
+
+PhotErr is a photometric error model for astronomical imaging surveys.
+It implements a generalization of the high-SNR point-source error model from [Ivezic (2019)](https://arxiv.org/abs/0805.2366) that is more accurate in the low SNR regime and includes errors for extended sources, using the models from [van den Busch (2020)](http://arxiv.org/abs/2007.01846) and [Kuijken (2019)](https://arxiv.org/abs/1902.11265).
+
+PhotErr currently includes photometric error models for the Vera C. Rubin Observatory Legacy Survey of Space and Time (LSST), as well as the Euclid and Nancy Grace Roman space telescopes.
+
+## Getting started
+
+PhotErr is available on PyPI and can be installed with pip:
+
+```bash
+pip install photerr
+```
+
+Note that PhotErr requires Python >= 3.8.
+
+Once installed, you can import the error models. For example, to use the default LSST error model,
+
+```python
+from photerr import LsstErrorModel
+errModel = LsstErrorModel()
+catalog_with_errors = errModel(catalog, random_state=42)
+```
+
+This uses all of the default settings for the LSST model, which includes 10 years of observations.
+If instead, you want to calculate errors for LSST year 1, you can pass the `nYrObs` argument to the constructor:
+
+```python
+errModel = LsstErrorModel(nYrObs=1)
+```
+
+Another parameter you might want to tweak is the name of the bands.
+By default, the `LsstErrorModel` assumes that the LSST bands are named `u`, `g`, etc.
+If instead, the bands in your catalog are named `lsst_u`, `lsst_g`, etc., then you can instantiate the error model with a rename dictionary:
+
+```python
+errModel = LsstErrorModel(renameDict={"u": "lsst_u", "g": "lsst_g", ...})
+```
+
+This tells `LsstErrorModel` to use all of the default parameters, but just change the names it gave to all of the bands.
+If you are changing other dictionary-parameters at the same time (e.g. `nVisYr`, which sets the number of visits in each band per year), you can supply those parameters using *either* the new or old naming scheme!
+
+The other big thing you may want to change is how the model handles non-detections, which are any "observed" fluxes with negative values.
+By default `ndMode="flag"`, which means that the error model will flag these values using the flag set by `ndFlag`, which defaults to `np.inf`.
+However, you can also set `ndMode="abs"`, in which case the error model takes the absolute value of the fluxes before calculating magnitudes.
+This is useful if you don't want to worry about non-detections, but it results in a non-Gaussian error distribution for low-SNR sources.
+You can also set `ndMode="sigLim"`, which clips all magnitudes at the n-sigma limit set by the `sigLim` parameter.
+For example, if `nMode="sigLim"` and `sigLim=1`, then all bands will be clipped at their 1-sigma (coadded) limit.
+
+Besides the parameters described above, there are many other you can tweak to fine tune the error model.
+To see all available parameters, you can either call help on the error models `params` object,
+
+```python
+help(errModel.params)
+```
+
+or look at the docstring of the corresponding parameters object,
+
+```python
+from photerr import LsstErrorParams
+help(LsstErrorParams)
+```
+
+All model parameters can be overridden using keyword arguments to the error model constructor.
+
+In addition to `LsstErrorModel`, which comes with the LSST defaults, PhotErr includes `EuclidErrorModel` and `RomanErrorModel` which come with the Euclid and Roman defaults, respectively.
+Each of these models also have corresponding parameter objects: `EuclidErrorParams` and `RomanErrorParams`.
+
+You can also start with the base error model, `PhotometricErrorModel`, which is not defaulted for any specific survey.
+To instantiate `PhotometricErrorModel`, there are several required arguments that you must supply.
+To see a list and explanation of these arguments, see the docstring for `ErrorParams`.
+
+## Explanation of the error model
+
+#### *The point source model*
+
+To derive the [Ivezic (2019)](https://arxiv.org/abs/0805.2366) error model, we start with the noise-to-signal ratio (NSR) for an object with photon count $C$ and background noise $N_0$ (which depends on seeing, read-out noise, etc.):
+$$
+\text{NSR}^2 = \frac{N_0^2 + C}{C^2}.
+$$
+If we define $C = C_5$ when $\text{NSR} = 1/5$, then we can solve for $N_0$ and write
+$$
+\text{NSR}^2 = \frac{1}{C_5} \left( \frac{C_5}{C} \right) + \left[ \left( \frac{1}{5} \right)^2 - \frac{1}{C_5} \right] \left( \frac{C_5}{C} \right)^2.
+$$
+Defining $x = \frac{C_5}{C} = 10 ^{\, (m - m_5) \, / \, 2.5}$ and $\gamma = \left( \frac{1}{5} \right)^2 - \frac{1}{C_5}$, we have
+$$
+\text{NSR}^2 = (0.04 - \gamma) x + \gamma \, x^2 ~~ (\text{mag}^2).
+$$
+
+In the high signal-to-noise ratio (SNR) limit, $\text{NSR} \ll 1$, and we can approximate
+$$
+\sigma_\text{rand} = 2.5 \log_{10}\left( 1 + \text{NSR} \right) \approx \text{NSR}.
+$$
+This approximation yields Equation 5 from [Ivezic (2019)](https://arxiv.org/abs/0805.2366).
+In PhotErr, we do not make this approximation so that the error model generalizes to the low SNR regime.
+In addition, while the high-SNR model assumes photometric errors are Gaussian in magnitude space, we model errors as Gaussian in flux space.
+However, both of these high-SNR approximations can be restored with the keyword `highSNR=True`.
+
+The LSST error model uses the parameters from [Ivezic (2019)](https://arxiv.org/abs/0805.2366).
+The Euclid and Roman error models follow [Graham (2020)](https://arxiv.org/abs/2004.07885) in setting $\gamma = 0.04$, which is nearly identical to the values for Rubin (which are all $\sim 0.039$).
+
+In addition to the random photometric error above, we include a system error of $\sigma_\text{sys} = 0.005$ which is added in quadrature to random error. Note that the system error can be changed using the keyword `sigmaSys`.
+
+After adding photometric errors to the catalog, PhotErr recalculates the photometric error from the "observed" magnitudes.
+This is so that the reported photometric errors do not provide a deterministic link back to the true magnitudes.
+This behavior can be disabled by setting `decorrelate=False`.
+
+#### *The extended source model*
+
+The [Ivezic (2019)](https://arxiv.org/abs/0805.2366) model calculates errors for point sources.
+To model errors for extended sources, we use Equation 5 from [van den Busch (2020)](http://arxiv.org/abs/2007.01846):
+$$
+\text{NSR}_\text{\, ext} \propto
+\text{NSR}_\text{\, pt} \, \sqrt{\frac{A_\text{ap}}{A_\text{psf}}},
+$$
+where $A_\text{ap}$ is the area of the source aperture, and $A_\text{psf}$ is the area of the PSF.
+We set the proportionality constant to unity, so that when $A_\text{ap} \to A_\text{psf}$, we recover the error for a point source.
+
+We include two different models for calculating the aperture area. The "auto" method from [van den Busch (2020)](http://arxiv.org/abs/2007.01846) calculates the semi-major and -minor axes of the aperture ($a_\text{ap}$ and $b_\text{ap}$) from the semi-major and -minor axes of the galaxy ($a_\text{gal}$ and $b_\text{gal}$, corresponding to half-light radii):
+$$
+a_\text{ap} = \sqrt{\sigma_\text{psf}^2 + (2.5 \, a_\text{gal})^2},
+\quad
+b_\text{ap} = \sqrt{\sigma_\text{psf}^2 + (2.5 \, b_\text{gal})^2},
+$$
+where $\sigma_\text{psf} = \text{FWHM}_\text{psf} \, / \, 2.355$ is the PSF standard deviation.
+The formula for the area of an ellipse is then used to calculate the aperture area: $A_\text{ap} = \pi a_\text{ap} b_\text{ap}$.
+
+The "gaap" method for extended sources ([Kuijken 2019](https://arxiv.org/abs/1902.11265)) is nearly identical, except that it adds a minimum aperture diameter in quadrature when calculating $a_\text{ap}$ and $b_\text{ap}$, and then clips aperture diameters above a certain maximum.
+
+Calculating errors for extended sources requires columns in the galaxy catalog corresponding to the semi-major and -minor axes of the galaxies (with the length scale corresponding to the half-light radius).
+You can set the names of these columns using the keywords `majorCol` and `minorCol`.
+
+## Authors
+
+[John Franklin Crenshaw](https://jfcrenshaw.github.io)  
+Ziang Yan  
+Sam Schmidt
