@@ -146,4 +146,4 @@ You can set the names of these columns using the keywords `majorCol` and `minorC
 ## Authors
 
 [John Franklin Crenshaw](https://jfcrenshaw.github.io)  
-Ziang Yan
+[Ziang Yan](https://yanzastro.github.io)
