@@ -13,7 +13,7 @@ It implements a generalization of the high-SNR point-source error model from [Iv
 
 PhotErr currently includes photometric error models for the Vera C. Rubin Observatory Legacy Survey of Space and Time (LSST), as well as the Euclid and Nancy Grace Roman space telescopes.
 
-## Getting started
+# Getting started
 
 PhotErr is available on PyPI and can be installed with pip:
 
@@ -31,37 +31,15 @@ errModel = LsstErrorModel()
 catalog_with_errors = errModel(catalog, random_state=42)
 ```
 
-The error model expects an input catalog in the form of a pandas DataFrame, and it returns another DataFrame containing all of the original information, except with photometric errors applied (note that if compatibility with Astropy Tables, Ordered Dictionaries, etc would be useful to you, let me know!).
+The error model expects an input catalog in the form of a pandas DataFrame with true magnitudes, and it returns another DataFrame containing observed magnitudes and photometric errors.
+Any extraneous columns in the DataFrame (e.g. a redshift column), remain in the new DataFrame - their presence does not effect the error model.
 
-## Tweaking the error model
+*If compatibility with Astropy Tables, Ordered Dictionaries, etc., would be useful to you, let me know!*
 
-The example above uses the default settings for the LSST model, which includes 10 years of observing time.
-If instead you want to calculate errors for LSST year 1, you can pass the `nYrObs` argument to the constructor:
+# Tweaking the error model
 
-```python
-errModel = LsstErrorModel(nYrObs=1)
-```
-
-Another parameter you might want to tweak is the name of the bands.
-By default, the `LsstErrorModel` assumes that the LSST bands are named `u`, `g`, etc.
-If instead, the bands in your catalog are named `lsst_u`, `lsst_g`, etc., then you can instantiate the error model with a rename dictionary:
-
-```python
-errModel = LsstErrorModel(renameDict={"u": "lsst_u", "g": "lsst_g", ...})
-```
-
-This tells `LsstErrorModel` to use all of the default parameters, but just change the names it gave to all of the bands.
-If you are changing other dictionary-parameters at the same time (e.g. `nVisYr`, which sets the number of visits in each band per year), you can supply those parameters using *either* the new or old naming scheme!
-
-The other big thing you may want to change is how the model handles non-detections, which are any "observed" fluxes with negative values.
-By default `ndMode="flag"`, which means that the error model will flag these values using the flag set by `ndFlag`, which defaults to `np.inf`.
-However, you can also set `ndMode="abs"`, in which case the error model takes the absolute value of the fluxes before calculating magnitudes.
-This is useful if you don't want to worry about non-detections, but it results in a non-Gaussian error distribution for low-SNR sources.
-You can also set `ndMode="sigLim"`, which clips all magnitudes at the n-sigma limit set by the `sigLim` parameter.
-For example, if `nMode="sigLim"` and `sigLim=1`, then all bands will be clipped at their 1-sigma (coadded) limit.
-
-Besides the parameters described above, there are many other you can tweak to fine tune the error model.
-To see all available parameters, you can either call help on the error models `params` object,
+There are many parameters you can tweak to fine tune the error model.
+To see all available parameters, you can either call help on the error model's `params` object,
 
 ```python
 help(errModel.params)
@@ -75,17 +53,59 @@ help(LsstErrorParams)
 ```
 
 All model parameters can be overridden using keyword arguments to the error model constructor.
+Below, we explain a few of the more commonly tweaked parameters.
 
-In addition to `LsstErrorModel`, which comes with the LSST defaults, PhotErr includes `EuclidErrorModel` and `RomanErrorModel` which come with the Euclid and Roman defaults, respectively.
+### *Changing the observing duration*
+
+The example above uses the default settings for the LSST model, which includes 10 years of observing time.
+If instead you want to calculate errors for LSST year 1, you can pass the `nYrObs` argument to the constructor:
+
+```python
+errModel = LsstErrorModel(nYrObs=1)
+```
+### *Changing the band names*
+
+Another parameter you might want to tweak is the name of the bands.
+By default, the `LsstErrorModel` assumes that the LSST bands are named `u`, `g`, etc.
+If instead, the bands in your catalog are named `lsst_u`, `lsst_g`, etc., then you can instantiate the error model with a rename dictionary:
+
+```python
+errModel = LsstErrorModel(renameDict={"u": "lsst_u", "g": "lsst_g", ...})
+```
+
+This tells `LsstErrorModel` to use all of the default parameters, but just change the names it gave to all of the bands.
+If you are changing other dictionary-parameters at the same time (e.g. `nVisYr`, which sets the number of visits in each band per year), you can supply those parameters using *either* the new or old naming scheme!
+
+### *Handling non-detections*
+
+The other big thing you may want to change is how the error model identifies and handles non-detections.
+
+The error model has a parameter named `sigLim`, which sets the limit for non-detections.
+By default, `sigLim=0`, which means that only negative fluxes count as non-detections, however if you set `sigLim=1`, then any magnitudes beyond the 1-sigma limit in each band will count as a non-detection.
+You can set `sigLim` to any non-negative float.
+
+The `ndMode` parameter tells the error model how to handle the non-detections.
+By default, `ndMode="flag"`, which means that the model will flag non-detections with the value set by `ndFlag`, which defaults to `np.inf`.
+However, you can also set `ndMode="sigLim"`, in which case the model will set all non-detections to the n-sigma limits set by the `sigLim` parameter described in the previous paragraph.
+Remember that `sigLim` also sets the detection threshold, so in effect, any galaxy magnitudes beyond the detection threshold will be set equal to the detection threshold.
+
+One other option is provided by the `absFlux` parameter.
+If `absFlux=True`, then the absolute value of all fluxes are taken before converting back to magnitudes.
+If combined with `sigLim=0`, this means every galaxy will have an observed flux in every band.
+This is useful if you do not want to worry about non-detections, but it results in a non-Gaussian error distribution for low-SNR sources.
+
+### *Other error models*
+
+In addition to `LsstErrorModel`, which comes with the LSST defaults, PhotErr includes `EuclidErrorModel` and `RomanErrorModel`, which come with the Euclid and Roman defaults, respectively.
 Each of these models also have corresponding parameter objects: `EuclidErrorParams` and `RomanErrorParams`.
 
 You can also start with the base error model, `PhotometricErrorModel`, which is not defaulted for any specific survey.
 To instantiate `PhotometricErrorModel`, there are several required arguments that you must supply.
 To see a list and explanation of these arguments, see the docstring for `ErrorParams`.
 
-## Explanation of the error model
+# Explanation of the error model
 
-#### *The point source model*
+### *The point source model*
 
 To derive the [Ivezic (2019)](https://arxiv.org/abs/0805.2366) error model, we start with the noise-to-signal ratio (NSR) for an object with photon count $C$ and background noise $N_0$ (which depends on seeing, read-out noise, etc.):
 
@@ -125,7 +145,7 @@ After adding photometric errors to the catalog, PhotErr recalculates the photome
 This is so that the reported photometric errors do not provide a deterministic link back to the true magnitudes.
 This behavior can be disabled by setting `decorrelate=False`.
 
-#### *The extended source model*
+### *The extended source model*
 
 The [Ivezic (2019)](https://arxiv.org/abs/0805.2366) model calculates errors for point sources.
 To model errors for extended sources, we use Equation 5 from [van den Busch (2020)](http://arxiv.org/abs/2007.01846):
@@ -154,7 +174,7 @@ The "gaap" method for extended sources ([Kuijken 2019](https://arxiv.org/abs/190
 Calculating errors for extended sources requires columns in the galaxy catalog corresponding to the semi-major and -minor axes of the galaxies (with the length scale corresponding to the half-light radius).
 You can set the names of these columns using the keywords `majorCol` and `minorCol`.
 
-## Authors
+# Authors
 
 [John Franklin Crenshaw](https://jfcrenshaw.github.io) \
 [Ziang Yan](https://yanzastro.github.io)
