@@ -1,8 +1,8 @@
 <div align="center">
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/jfcrenshaw/photerr/build?logo=github)
-![Codecov](https://img.shields.io/codecov/c/github/jfcrenshaw/photerr?label=codecov&logo=codecov)
-![PyPI](https://img.shields.io/pypi/v/photerr?color=blue&label=PyPI)
+[![build](https://github.com/jfcrenshaw/photerr/actions/workflows/main.yml/badge.svg)](https://github.com/jfcrenshaw/photerr/actions/workflows/main.yml)
+[![Codecov](https://img.shields.io/codecov/c/github/jfcrenshaw/photerr?label=codecov&logo=codecov)](https://app.codecov.io/gh/jfcrenshaw/photerr)
+[![PyPI](https://img.shields.io/pypi/v/photerr?color=blue&label=PyPI)](https://pypi.org/project/photerr/)
 
 </div>
 
