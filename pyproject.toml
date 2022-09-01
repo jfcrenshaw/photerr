@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "photerr"
-version = "0.1.1"
+version = "0.1.0"
 description = "Photometric error model for astronomical imaging surveys"
 authors = ["John Franklin Crenshaw <jfcrenshaw@gmail.com>"]
 readme = "README.md"
@@ -13,6 +13,7 @@ pandas = "^1.4.3"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
+pytest-cov = "^3.0.0"
 black = "^22.6.0"
 mypy = "^0.971"
 isort = "^5.10.1"
@@ -31,6 +32,7 @@ flake8-simplify = "^0.19.3"
 flake8-tidy-imports = "^4.8.0"
 jupyterlab = "^3.4.5"
 matplotlib = "^3.5.3"
+pre-commit = "^2.20.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
