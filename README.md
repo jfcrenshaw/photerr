@@ -26,7 +26,6 @@ catalog_with_errors = errModel(catalog, random_state=42)
 
 The error model expects an input catalog in the form of a pandas DataFrame, and it returns another DataFrame containing all of the original information, except with photometric errors applied (note that if compatibility with Astropy Tables, Ordered Dictionaries, etc would be useful to you, let me know!).
 
-
 ## Tweaking the error model
 
 The example above uses the default settings for the LSST model, which includes 10 years of observing time.
@@ -152,3 +151,5 @@ You can set the names of these columns using the keywords `majorCol` and `minorC
 
 [John Franklin Crenshaw](https://jfcrenshaw.github.io)  
 [Ziang Yan](https://yanzastro.github.io)
+
+[*Contributors guide*](CONTRIBUTING.md)
