@@ -90,7 +90,7 @@ jobs:
       #    run test suite and output coverage file
       #----------------------------------------------
       - name: Test with pytest
-        run: poetry run pytest --cov=<project-dir> --cov-report=xml
+        run: poetry run pytest --cov=./photerr --cov-report=xml
 
       #----------------------------------------------
       #             upload coverage stats
