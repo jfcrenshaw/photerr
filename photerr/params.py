@@ -48,7 +48,7 @@ param_docstring = """
         There are two options:
             - "flag" - non-detections are flagged using the ndFlag (see below)
             - "sigLim" - magnitudes are clipped at the n-sigma limits. I.e. if
-                sigLim=1 below, then all magnitudes greater than the 1-sigma limit
+                sigLim=1 above, then all magnitudes greater than the 1-sigma limit
                 in each band are replaced with the 1-sigma limiting magnitude.
     ndFlag : float; default=np.inf
         Flag for non-detections when ndMode == "flag".

@@ -57,7 +57,7 @@ class PhotometricErrorModel:
         self._calculate_m5()
 
         # calculate the limits for sigLim
-        self._sigLim = self.getLimitingMags(self.params.sigLim, coadded=True)
+        self._sigLim = self.getLimitingMags(self._params.sigLim, coadded=True)
 
     @property
     def params(self) -> ErrorParams:
@@ -235,6 +235,7 @@ class PhotometricErrorModel:
         majors: np.ndarray,
         minors: np.ndarray,
         bands: list,
+        sigLim: np.ndarray,
         rng: np.random.Generator,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Calculate the noise-to-signal ratio.
@@ -252,6 +253,8 @@ class PhotometricErrorModel:
             The semi-minor axes of the galaxies in arcseconds
         bands : list
             The list of bands the galaxy is observed in
+        sigLim : np.ndarray
+            The n-sigma limits for non-detection
         rng : np.random.Generator
             A numpy random number generator
 
@@ -272,7 +275,6 @@ class PhotometricErrorModel:
 
             # if ndMode == sigLim, then clip all magnitudes at the n-sigma limit
             if self.params.ndMode == "sigLim":
-                sigLim = np.array([self._sigLim[band] for band in bands])
                 obsMags = np.clip(obsMags, None, sigLim)
 
             # if decorrelate, then we calculate new errors using the observed mags
@@ -288,14 +290,13 @@ class PhotometricErrorModel:
             # calculate observed magnitudes
             fluxes = 10 ** (mags / -2.5)
             obsFluxes = fluxes * (1 + rng.normal(scale=nsr))
-            if self.params.ndMode == "abs":
+            if self.params.absFlux:
                 obsFluxes = np.abs(obsFluxes)
             with np.errstate(divide="ignore"):
                 obsMags = -2.5 * np.log10(np.clip(obsFluxes, 0, None))
 
             # if ndMode == sigLim, then clip all magnitudes at the n-sigma limit
             if self.params.ndMode == "sigLim":
-                sigLim = np.array([self._sigLim[band] for band in bands])
                 obsMags = np.clip(obsMags, None, sigLim)
 
             # if decorrelate, then we calculate new errors using the observed mags
@@ -335,6 +336,9 @@ class PhotometricErrorModel:
         # get the bands we will calculate errors for
         bands = [band for band in catalog.columns if band in self._bands]
 
+        # calculate the n-sigma limits
+        sigLim = np.array([self._sigLim[band] for band in bands])
+
         # get the numpy array of magnitudes
         mags = catalog[bands].to_numpy()
 
@@ -347,12 +351,15 @@ class PhotometricErrorModel:
             minors = None
 
         # get observed magnitudes and errors
-        obsMags, obsMagErrs = self._get_obs_and_errs(mags, majors, minors, bands, rng)
+        obsMags, obsMagErrs = self._get_obs_and_errs(
+            mags, majors, minors, bands, sigLim, rng
+        )
 
-        # flag all non-finite values with the ndFlag
+        # flag all non-detections with the ndFlag
         if self.params.ndMode == "flag":
-            obsMags[~np.isfinite(obsMags)] = self.params.ndFlag
-            obsMagErrs[~np.isfinite(obsMags)] = self.params.ndFlag
+            idx = (~np.isfinite(obsMags)) | (obsMags > sigLim)
+            obsMags[idx] = self.params.ndFlag
+            obsMagErrs[idx] = self.params.ndFlag
 
         # save the observations in a DataFrame
         errDf = pd.DataFrame(obsMagErrs, columns=[f"{band}_err" for band in bands])
