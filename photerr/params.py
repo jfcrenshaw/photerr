@@ -37,21 +37,27 @@ param_docstring = """
     sigmaSys : float; default=0.005
         The irreducible error of the system in AB magnitudes. Sets the minimum
         photometric error.
+    sigLim : float; default=0
+        The n-sigma detection limit. Magnitudes beyond this limit are treated as
+        non-detections. For example, if sigLim=1, then all magnitudes beyond the
+        1-sigma limit in each band are treated as non-detections. sigLim=0
+        corresponds to only treating negative fluxes as non-detections.
     ndMode : str; default="flag"
         The non-detection mode. I.e. how should the model handle non-detections?
-        Non-detections are defined as bands with negative flux.
-        There are three options:
+        Non-detections are defined as magnitudes beyond sigLim (see above).
+        There are two options:
             - "flag" - non-detections are flagged using the ndFlag (see below)
             - "sigLim" - magnitudes are clipped at the n-sigma limits. I.e. if
                 sigLim=1 below, then all magnitudes greater than the 1-sigma limit
                 in each band are replaced with the 1-sigma limiting magnitude.
-            - "abs" - the absolute value of negative fluxes are taken before
-                converting back to magnitudes. This assures there are no negative
-                fluxes so that each galaxy can be assigned a magnitude.
     ndFlag : float; default=np.inf
         Flag for non-detections when ndMode == "flag".
-    sigLim : float; default=1
-        The n-sigma limit at which to clip magnitudes when ndMode == "sigLim".
+    absFlux : bool; default=False
+        Whether to take the absolute value of "observed" fluxes, before converting
+        back to magnitudes. This removes the possibility of negative fluxes.
+        absFlux=True together with sigLim=0 ensures that every galaxy is assigned
+        an observed magnitude in every band, which is useful if you do not want to
+        worry about non-detections.
     extendedType: str; default="point"
         Whether to use the error model for point sources or extended sources.
         For point sources, use "point". For extended sources, you can use "auto"
@@ -69,7 +75,7 @@ param_docstring = """
     decorrelate : bool; default=True
         Whether or not to decorrelate the photometric errors. If True, after calculating
         observed magnitudes, the errors are re-calculated using the observed magnitudes.
-        If False, the original photometric errors are returned. Be warned, however, 
+        If False, the original photometric errors are returned. Be warned, however,
         that in this case, the returned photometric errors are calculated from the true
         magnitudes, and thus provide a deterministic link back to the true magnitudes!
     highSNR : bool; default=False
@@ -113,7 +119,7 @@ param_docstring = """
         dictionaries, which are used to calculate the limiting magnitudes using
         Eq. 6 from Ivezic 2019.
 
-    Note if for any bands you pass a value in the m5 dictionary, the model will use 
+    Note if for any bands you pass a value in the m5 dictionary, the model will use
     that value for that band, regardless of the values in Cm, msky, theta, and km.
 
     When instantiating the ErrorParams object, it will determine which bands it has
@@ -139,7 +145,9 @@ class ErrorParams:
     nYrObs: float
     nVisYr: Dict[str, float]
     gamma: Dict[str, float]
+
     m5: Dict[str, float] = field(default_factory=lambda: {})
+
     tvis: float = None  # type: ignore
     airmass: float = None  # type: ignore
     Cm: Dict[str, float] = field(default_factory=lambda: {})
@@ -148,9 +156,11 @@ class ErrorParams:
     km: Dict[str, float] = field(default_factory=lambda: {})
 
     sigmaSys: float = 0.005
-    sigLim: float = 1
+
+    sigLim: float = 0
     ndMode: str = "flag"
     ndFlag: float = np.inf
+    absFlux: bool = False
 
     extendedType: str = "point"
     aMin: float = 0.7

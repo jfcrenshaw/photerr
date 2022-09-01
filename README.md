@@ -1,3 +1,10 @@
+<div align="center">
+
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/jfcrenshaw/photerr/build?logo=github)
+![Codecov](https://img.shields.io/codecov/c/github/jfcrenshaw/photerr?label=codecov&logo=codecov)
+![PyPI](https://img.shields.io/pypi/v/photerr?color=blue&label=PyPI)
+
+</div>
 
 # PhotErr
 
@@ -25,7 +32,6 @@ catalog_with_errors = errModel(catalog, random_state=42)
 ```
 
 The error model expects an input catalog in the form of a pandas DataFrame, and it returns another DataFrame containing all of the original information, except with photometric errors applied (note that if compatibility with Astropy Tables, Ordered Dictionaries, etc would be useful to you, let me know!).
-
 
 ## Tweaking the error model
 
@@ -150,5 +156,7 @@ You can set the names of these columns using the keywords `majorCol` and `minorC
 
 ## Authors
 
-[John Franklin Crenshaw](https://jfcrenshaw.github.io)  
+[John Franklin Crenshaw](https://jfcrenshaw.github.io)
 [Ziang Yan](https://yanzastro.github.io)
+
+[*Contributors guide*](CONTRIBUTING.md)
