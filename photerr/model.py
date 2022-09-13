@@ -362,7 +362,9 @@ class PhotometricErrorModel:
             obsMagErrs[idx] = self.params.ndFlag
 
         # save the observations in a DataFrame
-        errDf = pd.DataFrame(obsMagErrs, columns=[f"{band}_err" for band in bands])
+        errDf = pd.DataFrame(
+            obsMagErrs, columns=[f"{band}_err" for band in bands], index=catalog.index
+        )
         if self.params.errLoc == "alone":
             obsCatalog = errDf
         else:
