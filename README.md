@@ -63,6 +63,7 @@ If instead you want to calculate errors for LSST year 1, you can pass the `nYrOb
 ```python
 errModel = LsstErrorModel(nYrObs=1)
 ```
+
 ### *Changing the band names*
 
 Another parameter you might want to tweak is the name of the bands.
@@ -99,8 +100,8 @@ This is useful if you do not want to worry about non-detections, but it results 
 In addition to `LsstErrorModel`, which comes with the LSST defaults, PhotErr includes `EuclidErrorModel` and `RomanErrorModel`, which come with the Euclid and Roman defaults, respectively.
 Each of these models also have corresponding parameter objects: `EuclidErrorParams` and `RomanErrorParams`.
 
-You can also start with the base error model, `PhotometricErrorModel`, which is not defaulted for any specific survey.
-To instantiate `PhotometricErrorModel`, there are several required arguments that you must supply.
+You can also start with the base error model, `ErrorModel`, which is not defaulted for any specific survey.
+To instantiate `ErrorModel`, there are several required arguments that you must supply.
 To see a list and explanation of these arguments, see the docstring for `ErrorParams`.
 
 # Explanation of the error model

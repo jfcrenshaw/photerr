@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
-from photerr.model import PhotometricErrorModel
+from photerr.model import ErrorModel
 from photerr.params import ErrorParams, param_docstring
 
 
@@ -44,7 +44,7 @@ class RomanErrorParams(ErrorParams):
     )
 
 
-class RomanErrorModel(PhotometricErrorModel):
+class RomanErrorModel(ErrorModel):
     """Photometric error model for Roman."""
 
     def __init__(self, **kwargs: Any) -> None:

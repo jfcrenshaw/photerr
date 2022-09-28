@@ -7,7 +7,7 @@ import pandas as pd
 from photerr.params import ErrorParams
 
 
-class PhotometricErrorModel:
+class ErrorModel:
     """Base error model from Ivezic 2019.
 
     References
