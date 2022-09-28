@@ -29,7 +29,7 @@ param_docstring = """
     Cm : dict
         A band dependent parameter defined in Ivezic 2019
     msky : dict
-        Median zenith sky brightness in each band
+        Median zenith sky brightness in each band, in AB mag / arcsec^2.
     theta : dict
         Median zenith seeing FWHM in arcseconds for each band
     km : dict
@@ -97,6 +97,8 @@ param_docstring = """
         parameters will be renamed. Additionally, if you are overriding any of the
         default dictionary parameters, you can provide those overrides using *either*
         the old or the new naming scheme.
+    validate : bool; True
+        Whether or not to validate all the parameters.
 
     Notes
     -----
@@ -134,6 +136,35 @@ param_docstring = """
     van den Busch 2020 - http://arxiv.org/abs/2007.01846
     Kuijken 2019 - https://arxiv.org/abs/1902.11265
 """
+
+# this dictionary defines the allowed types and values for every parameter
+# we will use it for parameter validation during ErrorParams instantiation
+_val_dict = {
+    # param: [ is dict?, [allowed types], [allowed values], negative allowed? ]
+    "nYrObs": [False, [int, float], [], False],
+    "nVisYr": [True, [int, float], [], False],
+    "gamma": [True, [int, float], [], True],
+    "m5": [True, [int, float], [], True],
+    "tvis": [False, [int, float], [], False],
+    "airmass": [False, [int, float], [], False],
+    "Cm": [True, [int, float], [], False],
+    "msky": [True, [int, float], [], True],
+    "theta": [True, [int, float], [], False],
+    "km": [True, [int, float], [], False],
+    "sigmaSys": [False, [int, float], [], False],
+    "sigLim": [False, [int, float], [], False],
+    "ndMode": [False, [str], ["flag", "sigLim"], None],
+    "ndFlag": [False, [int, float], [], True],
+    "absFlux": [False, [bool], [], None],
+    "extendedType": [False, [str], ["point", "auto", "gaap"], None],
+    "aMin": [False, [int, float], [], False],
+    "aMax": [False, [int, float], [], False],
+    "majorCol": [False, [str], [], None],
+    "minorCol": [False, [str], [], None],
+    "decorrelate": [False, [bool], [], None],
+    "highSNR": [False, [bool], [], None],
+    "errLoc": [False, [str], ["after", "end", "alone"], None],
+}
 
 
 @dataclass
@@ -174,11 +205,19 @@ class ErrorParams:
 
     renameDict: InitVar[Dict[str, str]] = None
 
-    def __post_init__(self, renameDict: Union[Dict[str, str], None]) -> None:
+    validate: InitVar[bool] = True
+
+    def __post_init__(
+        self, renameDict: Union[Dict[str, str], None], validate: bool
+    ) -> None:
         """Rename bands and remove duplicate parameters."""
         # if renameDict was provided, rename the bands
         if renameDict is not None:
             self.rename_bands(renameDict)
+
+        # validate the parameters
+        if validate:
+            self._validate_params()
 
         # clean up the dictionaries
         self._clean_dictionaries()
@@ -283,15 +322,87 @@ class ErrorParams:
         # update parameters from keywords
         safe_copy = self.copy()
         try:
+            # get the init variables
+            renameDict = kwargs.pop("renameDict", None)
+            validate = kwargs.pop("validate", True)
+
+            # update all the other parameters
             for key, param in kwargs.items():
                 setattr(self, key, param)
 
             # call post-init
-            self.__post_init__(renameDict=None)
-        except ValueError as error:
+            self.__post_init__(renameDict=renameDict, validate=validate)
+
+        except Exception as error:
             self.__dict__ = safe_copy.__dict__
-            raise Warning("Aborting update!\n\n" + str(error))
+            raise error
 
     def copy(self) -> ErrorParams:
         """Return a full copy of this ErrorParams instance."""
         return deepcopy(self)
+
+    @staticmethod
+    def _check_single_param(
+        key: str,
+        subkey: str,
+        param: Any,
+        allowed_types: list,
+        allowed_values: list,
+        negative_allowed: bool,
+    ) -> None:
+        """Check that this single parameter has the correct type/value."""
+        name = key if subkey is None else f"{key}.{subkey}"
+
+        if type(param) not in allowed_types:
+            raise TypeError(
+                f"{name} is of type {type(param).__name__}, but should be "
+                f"of type {', '.join(t.__name__ for t in allowed_types)}."
+            )
+        if len(allowed_values) > 0 and param not in allowed_values:
+            raise ValueError(
+                f"{name} has value {param}, but must be one of "
+                f"{', '.join(v for v in allowed_values)}."
+            )
+        if not negative_allowed and negative_allowed is not None and param < 0:
+            raise ValueError(f"{name} has value {param}, but must be positive!")
+
+    def _validate_params(self) -> None:
+        """Validate parameter types and values."""
+        # this dictionary defines the allowed types and values for every parameter
+
+        # loop over parameter and check against the value dictionary
+        for key, (
+            is_dict,
+            allowed_types,
+            allowed_values,
+            negative_allowed,
+        ) in _val_dict.items():
+            # get the parameter saved under the key
+            param = self.__dict__[key]
+
+            # do we have a dictionary on our hands?
+            if isinstance(param, dict) and not is_dict:
+                raise TypeError(f"{key} should not be a dictionary.")
+            elif not isinstance(param, dict) and is_dict:
+                raise TypeError(f"{key} should be a dictionary.")
+            if is_dict:
+                # loop over contents and check types and values
+                for subkey, subparam in param.items():
+                    self._check_single_param(
+                        key,
+                        subkey,
+                        subparam,
+                        allowed_types,  # type: ignore
+                        allowed_values,  # type: ignore
+                        negative_allowed,  # type: ignore
+                    )
+            else:
+                # check this single value
+                self._check_single_param(
+                    key,
+                    None,  # type: ignore
+                    param,
+                    allowed_types,  # type: ignore
+                    allowed_values,  # type: ignore
+                    negative_allowed,  # type: ignore
+                )
