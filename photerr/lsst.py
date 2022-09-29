@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
-from photerr.model import PhotometricErrorModel
+from photerr.model import ErrorModel
 from photerr.params import ErrorParams, param_docstring
 
 
@@ -81,7 +81,7 @@ class LsstErrorParams(ErrorParams):
     )
 
 
-class LsstErrorModel(PhotometricErrorModel):
+class LsstErrorModel(ErrorModel):
     """Photometric error model for Euclid."""
 
     def __init__(self, **kwargs: Any) -> None:

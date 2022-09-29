@@ -3,7 +3,7 @@ from importlib import metadata
 
 from .euclid import EuclidErrorModel, EuclidErrorParams
 from .lsst import LsstErrorModel, LsstErrorParams
-from .model import PhotometricErrorModel
+from .model import ErrorModel
 from .params import ErrorParams
 from .roman import RomanErrorModel, RomanErrorParams
 
