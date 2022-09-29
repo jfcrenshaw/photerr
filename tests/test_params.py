@@ -121,6 +121,15 @@ def test_bad_params(params: dict, error: Exception) -> None:
         LsstErrorParams().update(**params)
 
 
+def test_no_validation() -> None:
+    """Test that without parameter validation, you can assign bogus params."""
+    # with validation, this raises a type error
+    with pytest.raises(TypeError):
+        LsstErrorParams(tvis="fake")  # type: ignore
+    # without validation, no problem!
+    LsstErrorParams(tvis="fake", validate=False)  # type: ignore
+
+
 def test_missing_theta() -> None:
     """Test fail if we have extended error but don't have theta for everyone."""
     with pytest.raises(ValueError):
