@@ -222,15 +222,18 @@ class ErrorParams:
         # clean up the dictionaries
         self._clean_dictionaries()
 
-        # if using extended error types, make sure theta is provided for every band
-        if (
-            self.extendedType == "auto" or self.extendedType == "gaap"
-        ) and self.theta.keys() != self.nVisYr.keys():
-            raise ValueError(
-                "If using one of the extended error types "
-                "(i.e. extendedType == 'auto' or 'gaap'), "
-                "then theta must contain an entry for every band."
-            )
+        # if using extended error types,
+        if self.extendedType == "auto" or self.extendedType == "gaap":
+            # make sure theta is provided for every band
+            if set(self.theta.keys()) != set(self.nVisYr.keys()):
+                raise ValueError(
+                    "If using one of the extended error types "
+                    "(i.e. extendedType == 'auto' or 'gaap'), "
+                    "then theta must contain an entry for every band."
+                )
+            # make sure that aMin < aMax
+            elif self.aMin > self.aMax:
+                raise ValueError("aMin must be less than aMax.")
 
     def _clean_dictionaries(self) -> None:
         """Remove unnecessary info from all of the dictionaries.

@@ -1,6 +1,6 @@
 """Tests for the error param objects.
 
-The base ErrorParams object is only tested implicitly via the survey error params.
+The base ErrorParams object is only tested implicitly via LsstErrorParams.
 """
 import pytest
 
@@ -106,6 +106,7 @@ def test_bad_params() -> None:
         [{"extendedType": "test"}, ValueError],
         [{"nYrObs": -1}, ValueError],
         [{"extendedType": "auto", "theta": {}}, ValueError],
+        [{"extendedType": "auto", "aMin": 3, "aMax": 2}, ValueError],
     ]
     for (params, error) in bad_params:
         with pytest.raises(error):
