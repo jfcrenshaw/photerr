@@ -45,7 +45,7 @@ def test_random_state(data: pd.DataFrame) -> None:
 
     # bad random state should cause error
     with pytest.raises(TypeError):
-        LsstErrorModel()(data, "fake")
+        LsstErrorModel()(data, "fake")  # type: ignore
 
 
 @pytest.mark.parametrize(
@@ -197,7 +197,7 @@ def test_bad_instantiation() -> None:
         ErrorModel()
 
 
-def test_other_models(data) -> None:
+def test_other_models(data: pd.DataFrame) -> None:
     """Test instantiating other models and calculating errors."""
     euclidData = EuclidErrorModel()(data, 0)
     assert euclidData.shape == (data.shape[0], data.shape[1] + 1)
