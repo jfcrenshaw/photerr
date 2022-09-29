@@ -45,7 +45,7 @@ class ErrorModel:
         elif len(args) > 0 and len(kwargs) == 0:
             self._params = args[0]
         elif len(args) == 0 and len(kwargs) > 0:
-            self._params = ErrorParams(**kwargs)
+            self._params = ErrorParams(**kwargs)  # pragma: no cover
         else:
             self._params = args[0].copy()
             self._params.update(**kwargs)
@@ -445,5 +445,5 @@ class ErrorModel:
         # return as a dictionary
         return dict(zip(bands, limiting_mags))
 
-    def __repr__(self) -> str:  # noqa: D105
+    def __repr__(self) -> str:  # pragma: no cover
         return "Photometric error model with parameters:\n\n" + str(self.params)

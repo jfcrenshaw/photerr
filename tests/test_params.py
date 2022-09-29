@@ -71,6 +71,10 @@ def test_update() -> None:
     with pytest.raises(ValueError):  # noqa: PT011
         LsstErrorParams().update({}, {})
 
+    # test passing fake parameters fails
+    with pytest.raises(ValueError):
+        LsstErrorParams().update(fake=True)
+
     # test that all of these give the same results
     params1 = LsstErrorParams(nVisYr={"u": 20}, m5={"r": 30})
 
@@ -97,19 +101,27 @@ def test_param_val_dict() -> None:
     assert set(_val_dict.keys()) == set(LsstErrorParams().__dict__.keys())
 
 
-def test_bad_params() -> None:
+@pytest.mark.parametrize(
+    "params,error",
+    [
+        ({"nVisYr": "test"}, TypeError),
+        ({"nYrObs": {}}, TypeError),
+        ({"ndFlag": "test"}, TypeError),
+        ({"extendedType": "test"}, ValueError),
+        ({"nYrObs": -1}, ValueError),
+        ({"extendedType": "auto", "theta": {}}, ValueError),
+        ({"extendedType": "auto", "aMin": 3, "aMax": 2}, ValueError),
+    ],
+)
+def test_bad_params(params: dict, error: Exception) -> None:
     """Test that instantiation and updating fails with bad parameters."""
-    bad_params = [
-        [{"nVisYr": "test"}, TypeError],
-        [{"nYrObs": {}}, TypeError],
-        [{"ndFlag": "test"}, TypeError],
-        [{"extendedType": "test"}, ValueError],
-        [{"nYrObs": -1}, ValueError],
-        [{"extendedType": "auto", "theta": {}}, ValueError],
-        [{"extendedType": "auto", "aMin": 3, "aMax": 2}, ValueError],
-    ]
-    for (params, error) in bad_params:
-        with pytest.raises(error):
-            LsstErrorParams(**params)  # type: ignore
-        with pytest.raises(error):
-            LsstErrorParams().update(**params)  # type: ignore
+    with pytest.raises(error):
+        LsstErrorParams(**params)
+    with pytest.raises(error):
+        LsstErrorParams().update(**params)
+
+
+def test_missing_theta() -> None:
+    """Test fail if we have extended error but don't have theta for everyone."""
+    with pytest.raises(ValueError):
+        LsstErrorParams(extendedType="auto", theta={"g": 0.1}, m5={"u": 23})

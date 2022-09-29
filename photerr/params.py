@@ -143,10 +143,10 @@ _val_dict = {
     # param: [ is dict?, [allowed types], [allowed values], negative allowed? ]
     "nYrObs": [False, [int, float], [], False],
     "nVisYr": [True, [int, float], [], False],
-    "gamma": [True, [int, float], [], True],
+    "gamma": [True, [int, float], [], False],
     "m5": [True, [int, float], [], True],
-    "tvis": [False, [int, float], [], False],
-    "airmass": [False, [int, float], [], False],
+    "tvis": [False, [int, float, type(None)], [], False],
+    "airmass": [False, [int, float, type(None)], [], False],
     "Cm": [True, [int, float], [], False],
     "msky": [True, [int, float], [], True],
     "theta": [True, [int, float], [], False],
@@ -249,14 +249,15 @@ class ErrorParams:
 
         # remove the m5 bands from all other parameter dictionaries, and remove
         # bands from all_bands for which we don't have m5 data for
-        ignore_dicts = ["m5", "nVisYr", "gamma", "theta"]
+        ignore_dicts = ["m5", "nVisYr", "gamma"]
         for key, param in self.__dict__.items():
             # get the parameters that are dictionaries
             if isinstance(param, dict) and key not in ignore_dicts:
-                # remove bands that we have explicit m5's for
-                self.__dict__[key] = {
-                    band: val for band, val in param.items() if band not in self.m5
-                }
+                if key != "theta":
+                    # remove bands that we have explicit m5's for
+                    self.__dict__[key] = {
+                        band: val for band, val in param.items() if band not in self.m5
+                    }
 
                 # update the running list of bands that we have sufficient m5 data for
                 all_bands = all_bands.intersection(
@@ -322,6 +323,14 @@ class ErrorParams:
             else:
                 self.update(**args[0], **kwargs)
 
+        # make sure that all of the keywords are in the class
+        for key in kwargs:
+            if key not in self.__dict__:
+                raise ValueError(
+                    f"'{key}' is not a valid parameter name. "
+                    "Please check the docstring."
+                )
+
         # update parameters from keywords
         safe_copy = self.copy()
         try:
@@ -366,7 +375,12 @@ class ErrorParams:
                 f"{name} has value {param}, but must be one of "
                 f"{', '.join(v for v in allowed_values)}."
             )
-        if not negative_allowed and negative_allowed is not None and param < 0:
+        if (
+            not negative_allowed
+            and negative_allowed is not None
+            and param is not None
+            and param < 0
+        ):
             raise ValueError(f"{name} has value {param}, but must be positive!")
 
     def _validate_params(self) -> None:
