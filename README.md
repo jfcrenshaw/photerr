@@ -77,6 +77,13 @@ errModel = LsstErrorModel(renameDict={"u": "lsst_u", "g": "lsst_g", ...})
 This tells `LsstErrorModel` to use all of the default parameters, but just change the names it gave to all of the bands.
 If you are changing other dictionary-parameters at the same time (e.g. `nVisYr`, which sets the number of visits in each band per year), you can supply those parameters using *either* the new or old naming scheme!
 
+### *Directly setting limiting magnitudes*
+
+By default, PhotErr tries to use the provided information to calculate limiting magnitudes for you.
+If you would like to directly supply your own $5\sigma$ limits, you can do so using the `m5` parameter.
+Note that PhotErr assumes these are single-visit limiting magnitudes.
+If you want to supply coadded depths, you should also set `nYrObs=1` and `nVisYr={u: 1, g: 1, ...}`, so that the calculated coadded depths are equal to those you provided.
+
 ### *Handling non-detections*
 
 The other big thing you may want to change is how the error model identifies and handles non-detections.

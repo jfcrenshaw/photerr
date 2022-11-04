@@ -89,4 +89,4 @@ class LsstErrorModel(ErrorModel):
 
         Keyword arguments override default values in LsstErrorParams.
         """
-        super().__init__(LsstErrorParams(), **kwargs)
+        super().__init__(LsstErrorParams(**kwargs))
