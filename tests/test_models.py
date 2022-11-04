@@ -6,7 +6,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from photerr import ErrorModel, EuclidErrorModel, LsstErrorModel, RomanErrorModel
+from photerr import (
+    ErrorModel,
+    EuclidErrorModel,
+    LsstErrorModel,
+    RomanErrorModel,
+    LsstErrorParams,
+)
 
 
 @pytest.fixture()
@@ -204,3 +210,26 @@ def test_other_models(data: pd.DataFrame) -> None:
 
     romanData = RomanErrorModel()(data, 0)
     assert romanData.shape == (data.shape[0], data.shape[1] + 2)
+
+
+def test_rename_bands() -> None:
+    """Test renaming the bands in the error model.
+
+    This failure was noticed by Sam Schmidt.
+    """
+    LsstErrorModel(renameDict={"y": "y_lsst"})
+    EuclidErrorModel(renameDict={"Y": "y_euclid"})
+    RomanErrorModel(renameDict={"Y": "y_roman"})
+
+
+def test_alternate_instantiation() -> None:
+    """Test alternate ways of instantiating models."""
+    # test that all arguments works and gives me same effect as Params object
+    errM1 = ErrorModel(LsstErrorParams())
+    errM2 = ErrorModel(**LsstErrorParams().__dict__)
+    assert errM1.params.__dict__ == errM2.params.__dict__
+
+    # test that I can update params inside or outside the param object
+    errM1 = ErrorModel(LsstErrorParams(), nYrObs=2)
+    errM2 = ErrorModel(LsstErrorParams(nYrObs=2))
+    assert errM1.params == errM2.params

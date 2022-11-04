@@ -45,7 +45,7 @@ class ErrorModel:
         elif len(args) > 0 and len(kwargs) == 0:
             self._params = args[0]
         elif len(args) == 0 and len(kwargs) > 0:
-            self._params = ErrorParams(**kwargs)  # pragma: no cover
+            self._params = ErrorParams(**kwargs)
         else:
             self._params = args[0].copy()
             self._params.update(**kwargs)

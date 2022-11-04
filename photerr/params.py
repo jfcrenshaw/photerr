@@ -325,7 +325,7 @@ class ErrorParams:
 
         # make sure that all of the keywords are in the class
         for key in kwargs:
-            if key not in self.__dict__:
+            if key not in self.__dict__ and key not in ["renameDict", "validate"]:
                 raise ValueError(
                     f"'{key}' is not a valid parameter name. "
                     "Please check the docstring."

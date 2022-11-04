@@ -49,4 +49,4 @@ class EuclidErrorModel(ErrorModel):
 
         Keyword arguments override default values in EuclidErrorParams.
         """
-        super().__init__(EuclidErrorParams(), **kwargs)
+        super().__init__(EuclidErrorParams(**kwargs))

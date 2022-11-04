@@ -52,4 +52,4 @@ class RomanErrorModel(ErrorModel):
 
         Keyword arguments override default values in RomanErrorParams.
         """
-        super().__init__(RomanErrorParams(), **kwargs)
+        super().__init__(RomanErrorParams(**kwargs))
