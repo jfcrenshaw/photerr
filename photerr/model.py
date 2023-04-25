@@ -276,6 +276,7 @@ class ErrorModel:
             # if ndMode == sigLim, then clip all magnitudes at the n-sigma limit
             if self.params.ndMode == "sigLim":
                 obsMags = np.clip(obsMags, None, sigLim)
+                nsr = np.clip(nsr, None, 1 / self._params.sigLim)
 
             # if decorrelate, then we calculate new errors using the observed mags
             if self.params.decorrelate:
@@ -298,6 +299,7 @@ class ErrorModel:
             # if ndMode == sigLim, then clip all magnitudes at the n-sigma limit
             if self.params.ndMode == "sigLim":
                 obsMags = np.clip(obsMags, None, sigLim)
+                nsr = np.clip(nsr, None, 1 / self._params.sigLim)
 
             # if decorrelate, then we calculate new errors using the observed mags
             if self.params.decorrelate:
@@ -357,7 +359,14 @@ class ErrorModel:
 
         # flag all non-detections with the ndFlag
         if self.params.ndMode == "flag":
-            idx = (~np.isfinite(obsMags)) | (obsMags > sigLim)
+            # calculate SNR
+            if self.params.highSNR:
+                snr = 1 / obsMagErrs
+            else:
+                snr = 1 / (10 ** (obsMagErrs / 2.5) - 1)
+
+            # flag non-finite mags and where SNR is below sigLim
+            idx = (~np.isfinite(obsMags)) | (snr < self._params.sigLim)
             obsMags[idx] = self.params.ndFlag
             obsMagErrs[idx] = self.params.ndFlag
 

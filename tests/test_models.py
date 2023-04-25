@@ -33,6 +33,20 @@ def data() -> pd.DataFrame:
     return dataframe
 
 
+@pytest.fixture()
+def lsst_data() -> pd.DataFrame:
+    """Return 1000 random LSST galaxies for error model tests."""
+    rng = np.random.default_rng(0)
+    array = rng.normal(
+        loc=[25, 25, 25, 25, 25, 25, 0, 0],
+        scale=[2, 2, 2, 2, 2, 2, 0.2, 0.2],
+        size=(10_000, 8),
+    )
+    array[:, -2:] = np.abs(array[:, -2:])
+    dataframe = pd.DataFrame(array, columns=list("ugrizy") + ["major", "minor"])
+    return dataframe
+
+
 def test_random_state(data: pd.DataFrame) -> None:
     """Test that the random state behaves as expected."""
     data = data[["g"]].iloc[:2]
@@ -133,26 +147,90 @@ def test_ndFlag(data: pd.DataFrame) -> None:
     assert LsstErrorModel(ndFlag=-999, sigLim=1)(data, 0).iloc[-1, 0] == -999
 
 
-def test_sigLim(data: pd.DataFrame) -> None:
-    """Test that sigLim works correctly."""
-    # test that everything beyond sigLim is flagged
+def test_pointSource_sigLim(data: pd.DataFrame) -> None:
+    """Test that everything beyond sigLim is flagged."""
     assert np.all(LsstErrorModel(sigLim=10)(data, 0)[["g", "g_err"]].iloc[1:] == np.inf)
 
-    # test that everything beyond sigLim is cut to sigLim when ndMode==sigLim
-    # first with highSNR=False
-    sigLimData = LsstErrorModel(sigLim=10, ndMode="sigLim", highSNR=False)(data, 0)
-    assert np.isclose(sigLimData["g"][1], sigLimData["g"][2])
-    assert np.isclose(sigLimData["g_err"][1], sigLimData["g_err"][2])
-    # now with highSNR=True
-    sigLimData = LsstErrorModel(sigLim=10, ndMode="sigLim", highSNR=True)(data, 0)
+
+@pytest.mark.parametrize(
+    "extendedType,ndMode",
+    [
+        ("auto", "flag"),
+        ("gaap", "flag"),
+        ("auto", "sigLim"),
+        ("gaap", "sigLim"),
+    ],
+)
+def test_extended_sigLim(
+    extendedType: str, ndMode: str, lsst_data: pd.DataFrame
+) -> None:
+    """Test that sigLim works with extended source errors."""
+    # generate the photometric errors
+    sigLim = 3
+    errM = LsstErrorModel(sigLim=sigLim, ndMode=ndMode, extendedType=extendedType)
+    data = errM(lsst_data, 0)
+
+    # keep only the galaxies with finite magnitudes
+    data = data[np.isfinite(data)]
+
+    # calculate the SNR of every galaxy
+    snr = 1 / (10 ** (data[[col for col in data.columns if "err" in col]] / 2.5) - 1)
+    snr.rename(columns=lambda name: name.replace("err", "snr"), inplace=True)
+
+    # make sure the minimum SNR exceeds sigLim
+    assert np.all(snr.min() > sigLim)
+
+
+@pytest.mark.parametrize(
+    "highSNR,decorrelate",
+    [
+        (False, True),
+        (False, False),
+        (True, True),
+        (True, False),
+    ],
+)
+def test_pointSource_ndFlag_sigLim(
+    highSNR: bool, decorrelate: bool, data: pd.DataFrame
+) -> None:
+    """Test that ndFlag=sigLim works for point sources.
+
+    i.e. everything beyond sigLim is cut to sigLim when ndMode==sigLim
+    """
+    sigLimData = LsstErrorModel(
+        sigLim=10,
+        ndMode="sigLim",
+        highSNR=highSNR,
+        decorrelate=decorrelate,
+    )(data, 0)
     assert np.isclose(sigLimData["g"][1], sigLimData["g"][2])
     assert np.isclose(sigLimData["g_err"][1], sigLimData["g_err"][2])
 
 
-def test_absFlux(data: pd.DataFrame) -> None:
+@pytest.mark.parametrize(
+    "highSNR",
+    [
+        (False),
+        (True),
+    ],
+)
+def test_decorrelate_doesnt_change_siglim(highSNR: bool, data: pd.DataFrame) -> None:
+    """Test that decorrelate doesn't change the sigLim-ed outputs."""
+    decorrData = LsstErrorModel(
+        sigLim=100, ndMode="sigLim", highSNR=highSNR, decorrelate=True
+    )(data, 0)
+
+    corrData = LsstErrorModel(
+        sigLim=100, ndMode="sigLim", highSNR=highSNR, decorrelate=False
+    )(data, 0)
+
+    assert np.allclose(decorrData[1:], corrData[1:])
+
+
+def test_absFlux(lsst_data: pd.DataFrame) -> None:
     """Test that absFlux results in all finite magnitudes."""
-    assert ~np.all(np.isfinite(LsstErrorModel(absFlux=False)(data, 5)))
-    assert np.all(np.isfinite(LsstErrorModel(absFlux=True)(data, 5)))
+    assert ~np.all(np.isfinite(LsstErrorModel(absFlux=False)(lsst_data, 5)))
+    assert np.all(np.isfinite(LsstErrorModel(absFlux=True)(lsst_data, 5)))
 
 
 def test_limitingMags() -> None:
