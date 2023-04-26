@@ -217,6 +217,9 @@ class ErrorModel:
             A_ratio = 1  # type: ignore
         nsrRand *= np.sqrt(A_ratio)
 
+        # rescale the NSR
+        nsrRand *= scale
+
         # get the irreducible system NSR
         if self.params.highSNR:
             nsrSys = self.params.sigmaSys
@@ -225,9 +228,6 @@ class ErrorModel:
 
         # calculate the total NSR
         nsr = np.sqrt(nsrRand**2 + nsrSys**2)
-
-        # rescale the NSR
-        nsr *= scale
 
         return nsr
 
@@ -270,9 +270,6 @@ class ErrorModel:
         # and the scales
         scale = np.array([self.params.scale[band] for band in bands])
 
-        # rescale the NSR
-        nsr = nsr / scale
-
         # get the irreducible system NSR
         if self.params.highSNR:
             nsrSys = self.params.sigmaSys
@@ -281,6 +278,9 @@ class ErrorModel:
 
         # calculate the random NSR
         nsrRand = np.sqrt(nsr**2 - nsrSys**2)
+
+        # rescale the NSR
+        nsrRand /= scale
 
         # rescale according to the area ratio
         if majors is not None and minors is not None:

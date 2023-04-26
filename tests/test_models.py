@@ -411,26 +411,33 @@ def test_both_not_finite(sigLim: float, lsst_data: pd.DataFrame) -> None:
 
 
 @pytest.mark.parametrize("highSNR", [True, False])
-def test_scale(highSNR: bool, lsst_data: pd.DataFrame) -> None:
+def test_scale(highSNR: bool) -> None:
     """Test that scale linearly scales the final errors and changes limiting mags.
 
     Note we have to set decorrelate=False to make sure the errors are re-sampled,
     and absFlux=True to make sure all the errors are finite.
     """
+    # some custom data for this test
+    # one super high SNR, and one very low SNR
+    data = pd.DataFrame(
+        np.array([[10], [30]]) * np.ones((2, 6)),
+        columns=list("ugrizy"),
+    )
+
     # calculate errors with u scale = 1 and 2
     errsScale1 = LsstErrorModel(
         errLoc="alone",
         decorrelate=False,
         absFlux=True,
         highSNR=highSNR,
-    )(lsst_data, 0)
+    )(data, 0)
     errsScale2 = LsstErrorModel(
         errLoc="alone",
         decorrelate=False,
         absFlux=True,
         highSNR=highSNR,
         scale={"u": 2},
-    )(lsst_data, 0)
+    )(data, 0)
 
     # convert to numpy array
     errsScale1 = errsScale1.to_numpy()
@@ -447,8 +454,11 @@ def test_scale(highSNR: bool, lsst_data: pd.DataFrame) -> None:
     # calculate the error ratio
     ratio = nsrScale2 / nsrScale1
 
-    # check that u ratio is 2
-    assert np.allclose(ratio[:, :1], 2)
+    # check that super high SNR is not impacted
+    assert np.allclose(ratio[0, :], 1)
 
-    # and that all others are 1
-    assert np.allclose(ratio[:, 1:], 1)
+    # and the grizy bands of the low SNR
+    np.allclose(ratio[1, 1:], 1)
+
+    # but u band of low SNR is doubled
+    np.allclose(ratio[1, 0], 2)
