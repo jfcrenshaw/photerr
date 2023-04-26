@@ -301,6 +301,19 @@ def test_limitMags_aperture(extendedType: str) -> None:
     assert all(magLimAp0[band] > magLimAp1[band] for band in magLimAp0)
 
 
+def test_limitingMags_scale() -> None:
+    """Test that increasing the error scale decreases the limiting mags."""
+    magLimScale1 = LsstErrorModel(
+        scale={band: 1 for band in "ugrizy"}
+    ).getLimitingMags()
+
+    magLimScale2 = LsstErrorModel(
+        scale={band: 2 for band in "ugrizy"}
+    ).getLimitingMags()
+
+    assert all(magLimScale1[band] > magLimScale2[band] for band in magLimScale1)
+
+
 def test_errLoc(data: pd.DataFrame) -> None:
     """Test that errLoc works as expected."""
     # the error column should come right after the magnitude column
@@ -395,3 +408,47 @@ def test_both_not_finite(sigLim: float, lsst_data: pd.DataFrame) -> None:
 
         # where error is not finite, make sure band is not finite
         assert ~np.isfinite(data[band][~np.isfinite(data[f"{band}_err"])]).any()
+
+
+@pytest.mark.parametrize("highSNR", [True, False])
+def test_scale(highSNR: bool, lsst_data: pd.DataFrame) -> None:
+    """Test that scale linearly scales the final errors and changes limiting mags.
+
+    Note we have to set decorrelate=False to make sure the errors are re-sampled,
+    and absFlux=True to make sure all the errors are finite.
+    """
+    # calculate errors with u scale = 1 and 2
+    errsScale1 = LsstErrorModel(
+        errLoc="alone",
+        decorrelate=False,
+        absFlux=True,
+        highSNR=highSNR,
+    )(lsst_data, 0)
+    errsScale2 = LsstErrorModel(
+        errLoc="alone",
+        decorrelate=False,
+        absFlux=True,
+        highSNR=highSNR,
+        scale={"u": 2},
+    )(lsst_data, 0)
+
+    # convert to numpy array
+    errsScale1 = errsScale1.to_numpy()
+    errsScale2 = errsScale2.to_numpy()
+
+    # calculate nsr
+    if highSNR:
+        nsrScale1 = errsScale1
+        nsrScale2 = errsScale2
+    else:
+        nsrScale1 = 10 ** (errsScale1 / 2.5) - 1
+        nsrScale2 = 10 ** (errsScale2 / 2.5) - 1
+
+    # calculate the error ratio
+    ratio = nsrScale2 / nsrScale1
+
+    # check that u ratio is 2
+    assert np.allclose(ratio[:, :1], 2)
+
+    # and that all others are 1
+    assert np.allclose(ratio[:, 1:], 1)

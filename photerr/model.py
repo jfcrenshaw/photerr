@@ -194,6 +194,8 @@ class ErrorModel:
         gamma = np.array([self.params.gamma[band] for band in bands])
         # and the number of visits per year
         nVisYr = np.array([self.params.nVisYr[band] for band in bands])
+        # and the scales
+        scale = np.array([self.params.scale[band] for band in bands])
 
         # calculate x as defined in the paper
         x = 10 ** (0.4 * (mags - m5))
@@ -223,6 +225,9 @@ class ErrorModel:
 
         # calculate the total NSR
         nsr = np.sqrt(nsrRand**2 + nsrSys**2)
+
+        # rescale the NSR
+        nsr *= scale
 
         return nsr
 
@@ -262,6 +267,11 @@ class ErrorModel:
         gamma = np.array([self.params.gamma[band] for band in bands])
         # and the number of visits per year
         nVisYr = np.array([self.params.nVisYr[band] for band in bands])
+        # and the scales
+        scale = np.array([self.params.scale[band] for band in bands])
+
+        # rescale the NSR
+        nsr = nsr / scale
 
         # get the irreducible system NSR
         if self.params.highSNR:
@@ -280,7 +290,7 @@ class ErrorModel:
                 A_ratio = self._get_area_ratio_gaap(majors, minors, bands)
             else:
                 A_ratio = 1  # type: ignore
-            nsrRand /= np.sqrt(A_ratio)
+            nsrRand = nsrRand / np.sqrt(A_ratio)
 
         # get the number of exposures
         if coadded:
