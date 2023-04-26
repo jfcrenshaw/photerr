@@ -56,9 +56,6 @@ class ErrorModel:
         # calculate all of the 5-sigma limiting magnitudes
         self._calculate_m5()
 
-        # calculate the limits for sigLim
-        self._sigLim = self.getLimitingMags(self._params.sigLim, coadded=True)
-
     @property
     def params(self) -> ErrorParams:
         """The error model parameters in an ErrorParams objet."""  # noqa: D401
@@ -151,8 +148,8 @@ class ErrorModel:
 
         # convert galaxy half-light radii to Gaussian sigmas
         # this conversion factor comes from half-IQR -> sigma
-        majors /= 0.6745
-        minors /= 0.6745
+        majors = majors / 0.6745
+        minors = minors / 0.6745
 
         # calculate the area of the psf in each band
         A_psf = np.pi * psf_sig**2
@@ -167,7 +164,7 @@ class ErrorModel:
         # return their ratio
         return A_ap / A_psf
 
-    def _get_NSR(
+    def _get_nsr_from_mags(
         self, mags: np.ndarray, majors: np.ndarray, minors: np.ndarray, bands: list
     ) -> np.ndarray:
         """Calculate the noise-to-signal ratio.
@@ -189,7 +186,7 @@ class ErrorModel:
         Returns
         -------
         np.ndarray
-            The ratio of aperture size to PSF size for each band and galaxy.
+            The noise-to-signal ratio of each galaxy
         """
         # get the 5-sigma limiting magnitudes for these bands
         m5 = np.array([self._all_m5[band] for band in bands])
@@ -197,6 +194,8 @@ class ErrorModel:
         gamma = np.array([self.params.gamma[band] for band in bands])
         # and the number of visits per year
         nVisYr = np.array([self.params.nVisYr[band] for band in bands])
+        # and the scales
+        scale = np.array([self.params.scale[band] for band in bands])
 
         # calculate x as defined in the paper
         x = 10 ** (0.4 * (mags - m5))
@@ -218,6 +217,9 @@ class ErrorModel:
             A_ratio = 1  # type: ignore
         nsrRand *= np.sqrt(A_ratio)
 
+        # rescale the NSR
+        nsrRand *= scale
+
         # get the irreducible system NSR
         if self.params.highSNR:
             nsrSys = self.params.sigmaSys
@@ -229,13 +231,94 @@ class ErrorModel:
 
         return nsr
 
+    def _get_mags_from_nsr(
+        self,
+        nsr: np.ndarray,
+        majors: np.ndarray,
+        minors: np.ndarray,
+        bands: list,
+        coadded: bool = True,
+    ) -> np.ndarray:
+        """Calculate magnitudes that correspond to the given NSRs.
+
+        Essentially inverts self._get_nsr_from_mags().
+
+        Parameters
+        ----------
+        nsr : np.ndarray
+            The noise-to-signal ratios of the galaxies
+        majors : np.ndarray
+            The semi-major axes of the galaxies in arcseconds
+        minors : np.ndarray
+            The semi-minor axes of the galaxies in arcseconds
+        bands : list
+            The list of bands the galaxy is observed in
+        coadded : bool; default=True
+            If True, assumes NSR is after coaddition.
+
+        Returns
+        -------
+        np.ndarray
+            The magnitude corresponding to the NSR for each galaxy
+        """
+        # get the 5-sigma limiting magnitudes for these bands
+        m5 = np.array([self._all_m5[band] for band in bands])
+        # and the values for gamma
+        gamma = np.array([self.params.gamma[band] for band in bands])
+        # and the number of visits per year
+        nVisYr = np.array([self.params.nVisYr[band] for band in bands])
+        # and the scales
+        scale = np.array([self.params.scale[band] for band in bands])
+
+        # get the irreducible system NSR
+        if self.params.highSNR:
+            nsrSys = self.params.sigmaSys
+        else:
+            nsrSys = 10 ** (self.params.sigmaSys / 2.5) - 1
+
+        # calculate the random NSR
+        nsrRand = np.sqrt(nsr**2 - nsrSys**2)
+
+        # rescale the NSR
+        nsrRand /= scale
+
+        # rescale according to the area ratio
+        if majors is not None and minors is not None:
+            if self.params.extendedType == "auto":
+                A_ratio = self._get_area_ratio_auto(majors, minors, bands)
+            elif self.params.extendedType == "gaap":
+                A_ratio = self._get_area_ratio_gaap(majors, minors, bands)
+            else:
+                A_ratio = 1  # type: ignore
+            nsrRand = nsrRand / np.sqrt(A_ratio)
+
+        # get the number of exposures
+        if coadded:
+            nStackedObs = nVisYr * self.params.nYrObs
+        else:
+            nStackedObs = 1  # type: ignore
+
+        # calculate the NSR for a single image
+        nsrRandSingleExp = nsrRand * np.sqrt(nStackedObs)
+
+        # calculate the value of x that corresponds to this NSR
+        # this is just the quadratic equation applied to Eq 5 from Ivezic 2019
+        x = (
+            (gamma - 0.04)
+            + np.sqrt((gamma - 0.04) ** 2 + 4 * gamma * nsrRandSingleExp**2)
+        ) / (2 * gamma)
+
+        # convert x to magnitudes
+        mags = m5 + 2.5 * np.log10(x)
+
+        return mags
+
     def _get_obs_and_errs(
         self,
         mags: np.ndarray,
         majors: np.ndarray,
         minors: np.ndarray,
         bands: list,
-        sigLim: np.ndarray,
         rng: np.random.Generator,
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Calculate the noise-to-signal ratio.
@@ -253,8 +336,6 @@ class ErrorModel:
             The semi-minor axes of the galaxies in arcseconds
         bands : list
             The list of bands the galaxy is observed in
-        sigLim : np.ndarray
-            The n-sigma limits for non-detection
         rng : np.random.Generator
             A numpy random number generator
 
@@ -264,7 +345,7 @@ class ErrorModel:
             The ratio of aperture size to PSF size for each band and galaxy.
         """
         # get the NSR for all galaxies
-        nsr = self._get_NSR(mags, majors, minors, bands)
+        nsr = self._get_nsr_from_mags(mags, majors, minors, bands)
 
         if self.params.highSNR:
             # in the high SNR approximation, mag err ~ nsr, and we can model
@@ -272,16 +353,6 @@ class ErrorModel:
 
             # calculate observed magnitudes
             obsMags = rng.normal(loc=mags, scale=nsr)
-
-            # if ndMode == sigLim, then clip all magnitudes at the n-sigma limit
-            if self.params.ndMode == "sigLim":
-                obsMags = np.clip(obsMags, None, sigLim)
-
-            # if decorrelate, then we calculate new errors using the observed mags
-            if self.params.decorrelate:
-                nsr = self._get_NSR(obsMags, majors, minors, bands)
-
-            obsMagErrs = nsr
 
         else:
             # in the more accurate error model, we acknowledge err != nsr,
@@ -295,14 +366,26 @@ class ErrorModel:
             with np.errstate(divide="ignore"):
                 obsMags = -2.5 * np.log10(np.clip(obsFluxes, 0, None))
 
-            # if ndMode == sigLim, then clip all magnitudes at the n-sigma limit
-            if self.params.ndMode == "sigLim":
-                obsMags = np.clip(obsMags, None, sigLim)
+        # if decorrelate, then we calculate new errors using the observed mags
+        if self.params.decorrelate:
+            nsr = self._get_nsr_from_mags(obsMags, majors, minors, bands)
 
-            # if decorrelate, then we calculate new errors using the observed mags
-            if self.params.decorrelate:
-                nsr = self._get_NSR(obsMags, majors, minors, bands)
+        # if ndMode == sigLim, then clip at the n-sigma limit
+        if self.params.ndMode == "sigLim":
+            # determine the nsr limit
+            with np.errstate(divide="ignore"):
+                nsrLim = np.divide(1, self.params.sigLim)
 
+            # calculate limiting magnitudes for each galaxy
+            magLim = self._get_mags_from_nsr(nsrLim, majors, minors, bands)
+
+            # clip mags and nsr's at this limit
+            nsr = np.clip(nsr, 0, nsrLim)
+            obsMags = np.clip(obsMags, None, magLim)
+
+        if self.params.highSNR:
+            obsMagErrs = nsr
+        else:
             obsMagErrs = 2.5 * np.log10(1 + nsr)
 
         return obsMags, obsMagErrs
@@ -336,9 +419,6 @@ class ErrorModel:
         # get the bands we will calculate errors for
         bands = [band for band in catalog.columns if band in self._bands]
 
-        # calculate the n-sigma limits
-        sigLim = np.array([self._sigLim[band] for band in bands])
-
         # get the numpy array of magnitudes
         mags = catalog[bands].to_numpy()
 
@@ -351,13 +431,18 @@ class ErrorModel:
             minors = None
 
         # get observed magnitudes and errors
-        obsMags, obsMagErrs = self._get_obs_and_errs(
-            mags, majors, minors, bands, sigLim, rng
-        )
+        obsMags, obsMagErrs = self._get_obs_and_errs(mags, majors, minors, bands, rng)
 
         # flag all non-detections with the ndFlag
         if self.params.ndMode == "flag":
-            idx = (~np.isfinite(obsMags)) | (obsMags > sigLim)
+            # calculate SNR
+            if self.params.highSNR:
+                snr = 1 / obsMagErrs
+            else:
+                snr = 1 / (10 ** (obsMagErrs / 2.5) - 1)
+
+            # flag non-finite mags and where SNR is below sigLim
+            idx = (~np.isfinite(obsMags)) | (snr < self.params.sigLim)
             obsMags[idx] = self.params.ndFlag
             obsMagErrs[idx] = self.params.ndFlag
 
@@ -382,12 +467,10 @@ class ErrorModel:
 
         return obsCatalog
 
-    def getLimitingMags(self, nSigma: float = 5, coadded: bool = True) -> dict:
-        """Return the limiting magnitudes for point sources in all bands.
-
-        This method essentially reverse engineers the _get_NSR method so that we
-        calculate what magnitude results in NSR = 1/nSigma.
-        (NSR is noise-to-signal ratio; NSR = 1/SNR)
+    def getLimitingMags(
+        self, nSigma: float = 5, coadded: bool = True, aperture: float = 0
+    ) -> dict:
+        """Return the limiting magnitudes in all bands.
 
         Parameters
         ----------
@@ -398,52 +481,30 @@ class ErrorModel:
         coadded : bool; default=True
             If True, returns the limiting magnitudes for a coadded image. If False,
             returns the limiting magnitudes for a single visit.
+        aperture : float, default=0
+            Radius of circular aperture in arcseconds. If zero, limiting magnitudes
+            are for point sources. If greater than zero, limiting magnitudes are
+            for objects of that size. Increasing the aperture decreases the
+            signal-to-noise ratio. This only has an impact if extendedType != "point.
 
         Returns
         -------
         dict
             The dictionary of limiting magnitudes
         """
-        bands = self._bands
-
-        # if nSigma is zero, return infinite magnitude limits
-        if np.isclose(0, nSigma):
-            return {band: np.inf for band in bands}
-
-        # get the 5-sigma limiting magnitudes for these bands
-        m5 = np.array([self._all_m5[band] for band in bands])
-        # and the values for gamma
-        gamma = np.array([self.params.gamma[band] for band in bands])
-        # and the number of visits per year
-        nVisYr = np.array([self.params.nVisYr[band] for band in bands])
-
-        # get the number of exposures
-        if coadded:
-            nStackedObs = nVisYr * self.params.nYrObs
-        else:
-            nStackedObs = 1  # type: ignore
-
-        # get the irreducible system error
-        if self.params.highSNR:
-            nsrSys = self.params.sigmaSys
-        else:
-            nsrSys = 10 ** (self.params.sigmaSys / 2.5) - 1
-
-        # calculate the random NSR that a single exposure must have
-        nsrRandSingleExp = np.sqrt((1 / nSigma**2 - nsrSys**2) * nStackedObs)
-
-        # calculate the value of x that corresponds to this NSR
-        # this is just the quadratic equation applied to Eq 5 from Ivezic 2019
-        x = (
-            (gamma - 0.04)
-            + np.sqrt((gamma - 0.04) ** 2 + 4 * gamma * nsrRandSingleExp**2)
-        ) / (2 * gamma)
-
-        # convert x to a limiting magnitude
-        limiting_mags = m5 + 2.5 * np.log10(x)
-
         # return as a dictionary
-        return dict(zip(bands, limiting_mags))
+        return dict(
+            zip(
+                self._bands,
+                self._get_mags_from_nsr(
+                    1 / nSigma,  # type: ignore
+                    np.array([aperture]),
+                    np.array([aperture]),
+                    self._bands,
+                    coadded,
+                ).flatten(),
+            )
+        )
 
     def __repr__(self) -> str:  # pragma: no cover
         return "Photometric error model with parameters:\n\n" + str(self.params)

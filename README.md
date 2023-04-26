@@ -36,6 +36,13 @@ Any extraneous columns in the DataFrame (e.g. a redshift column), remain in the 
 
 *If compatibility with Astropy Tables, Ordered Dictionaries, etc., would be useful to you, let me know!*
 
+You can also calculate limiting magnitudes:
+
+```python
+errModel.getLimitingMags() # coadded point-source 5-sigma limits
+errModel.getLimitingMags(nSigma=1, coadded=False) # single-image point-source 1-sigma limits
+```
+
 # Tweaking the error model
 
 There are many parameters you can tweak to fine tune the error model.
@@ -101,6 +108,24 @@ One other option is provided by the `absFlux` parameter.
 If `absFlux=True`, then the absolute value of all fluxes are taken before converting back to magnitudes.
 If combined with `sigLim=0`, this means every galaxy will have an observed flux in every band.
 This is useful if you do not want to worry about non-detections, but it results in a non-Gaussian error distribution for low-SNR sources.
+
+### Errors for extended sources
+
+PhotErr can be used to calculate errors for extended sources as well.
+You just have to pass `extendedType="auto"` or `extendedType="gaap"` to the constructor (see explanation below for the differences in these models).
+PhotErr will then look for columns in the input DataFrame that correspond to the semi-major and -minor axes of the objects, corresponding to half-light radii in arcseconds.
+By default, it looks for these in columns titled "major" and "minor", but you can change the names of these columns using the `majorCol` and `minorCol` keywords.
+
+You can also calculate limiting magnitudes for apertures of a given size by passing the `aperture` keyword to `errModel.getLimitingMags()`
+
+### Scaling the errors
+
+If you want to scale up or scale down the errors in any band(s), you can use the keyword `scale`. 
+For example, `LsstErrorModel(scale={"u": 2, "y": 2})` will have all the same properties of the default error model, except the errors in the `u` and `y` bands will be doubled.
+This allows you to answer questions like "what happens to my science if the `u` band errors are doubled."
+
+Note this only scales the band-specific error.
+The band-independent systematic error floor, `sigmaSys` is still the same, and so at high-SNR, near the systematic floor, the errors won't scale as you expect.
 
 ### *Other error models*
 

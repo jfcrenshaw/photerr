@@ -83,6 +83,11 @@ param_docstring = """
         then Eq. 5 from that paper is used to calculate (N/S)^2 in flux, and errors
         are Gaussian in flux space. If True, Eq. 5 is used to calculate the Gaussian
         variance in magnitude space.
+    scale : dict; default=dict()
+        A dictionary that rescales the error for the given bands. For example, if
+        scale = {"u": 2}, then all the errors for the u band are doubled. This allows
+        you to answer questions like "what happens to my science if the u band errors
+        are doubled."
     errLoc: str; default="after"
         Where to place the error columns in the output table. If "after", then the
         error columns will be placed immediately after the corresponding magnitude
@@ -163,6 +168,7 @@ _val_dict = {
     "minorCol": [False, [str], [], None],
     "decorrelate": [False, [bool], [], None],
     "highSNR": [False, [bool], [], None],
+    "scale": [True, [int, float], [], None],
     "errLoc": [False, [str], ["after", "end", "alone"], None],
 }
 
@@ -201,10 +207,11 @@ class ErrorParams:
 
     decorrelate: bool = True
     highSNR: bool = False
+    scale: Dict[str, float] = field(default_factory=lambda: {})
+
     errLoc: str = "after"
 
     renameDict: InitVar[Dict[str, str]] = None
-
     validate: InitVar[bool] = True
 
     def __post_init__(
@@ -243,13 +250,16 @@ class ErrorParams:
 
         Additionally, we will remove any band from all dictionaries that don't have
         an entry in all of nVisYr, gamma, and (m5 OR Cm + msky + theta + km).
+
+        Finally, we will set scale=1 for all bands for which the scale isn't
+        explicitly set.
         """
         # keep a running set of all the bands we will calculate errors for
         all_bands = set(self.nVisYr.keys()).intersection(self.gamma.keys())
 
         # remove the m5 bands from all other parameter dictionaries, and remove
         # bands from all_bands for which we don't have m5 data for
-        ignore_dicts = ["m5", "nVisYr", "gamma"]
+        ignore_dicts = ["m5", "nVisYr", "gamma", "scale"]
         for key, param in self.__dict__.items():
             # get the parameters that are dictionaries
             if isinstance(param, dict) and key not in ignore_dicts:
@@ -264,8 +274,7 @@ class ErrorParams:
                     set(param.keys()).union(set(self.m5.keys()))
                 )
 
-        # finally, remove all of the data for bands that we will not be
-        # calculating errors for
+        # remove all data for bands we will not be calculating errors for
         for key, param in self.__dict__.items():
             if isinstance(param, dict):
                 self.__dict__[key] = {
@@ -282,6 +291,12 @@ class ErrorParams:
                 "entry in nVisYr and gamma, plus either an entry in m5 or an entry "
                 "in all of Cm, msky, theta, and km."
             )
+
+        # finally, fill out the rest of the scale dictionary
+        self.scale = {
+            band: float(self.scale[band]) if band in self.scale else 1.0
+            for band in self.nVisYr
+        }
 
     def rename_bands(self, renameDict: Dict[str, str]) -> None:
         """Rename the bands used in the error model.

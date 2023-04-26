@@ -115,9 +115,9 @@ def test_param_val_dict() -> None:
 )
 def test_bad_params(params: dict, error: Exception) -> None:
     """Test that instantiation and updating fails with bad parameters."""
-    with pytest.raises(error):
+    with pytest.raises(error):  # type: ignore
         LsstErrorParams(**params)
-    with pytest.raises(error):
+    with pytest.raises(error):  # type: ignore
         LsstErrorParams().update(**params)
 
 
