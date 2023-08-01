@@ -1,6 +1,6 @@
 """Photometric error model for LSST."""
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from photerr.model import ErrorModel
 from photerr.params import ErrorParams, param_docstring
@@ -15,7 +15,6 @@ class LsstErrorParams(ErrorParams):
 
     __doc__ += param_docstring
 
-    tvis: float = 30.0
     nYrObs: float = 10.0
     nVisYr: Dict[str, float] = field(
         default_factory=lambda: {
@@ -37,8 +36,11 @@ class LsstErrorParams(ErrorParams):
             "y": 0.039,
         }
     )
-    airmass: float = 1.2
+
     m5: Dict[str, float] = field(default_factory=lambda: {})
+
+    tvis: Optional[float] = 30.0
+    airmass: Optional[float] = 1.2
     Cm: Dict[str, float] = field(
         default_factory=lambda: {
             "u": 23.09,

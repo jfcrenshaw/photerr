@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import InitVar, dataclass, field
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
 
@@ -185,8 +185,8 @@ class ErrorParams:
 
     m5: Dict[str, float] = field(default_factory=lambda: {})
 
-    tvis: float = None  # type: ignore
-    airmass: float = None  # type: ignore
+    tvis: Optional[float] = None  
+    airmass: Optional[float] = None  
     Cm: Dict[str, float] = field(default_factory=lambda: {})
     msky: Dict[str, float] = field(default_factory=lambda: {})
     theta: Dict[str, float] = field(default_factory=lambda: {})
@@ -211,7 +211,7 @@ class ErrorParams:
 
     errLoc: str = "after"
 
-    renameDict: InitVar[Dict[str, str]] = None
+    renameDict: InitVar[Optional[Dict[str, str]]] = None
     validate: InitVar[bool] = True
 
     def __post_init__(
