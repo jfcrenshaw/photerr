@@ -45,7 +45,7 @@ version = "21.2.0"
 description = "Low-level CFFI bindings for Argon2"
 category = "dev"
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.8"
 
 [package.dependencies]
 cffi = ">=1.0.1"
