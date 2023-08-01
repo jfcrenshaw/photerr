@@ -32,7 +32,7 @@ class EuclidErrorParams(ErrorParams):
             "H": 0.04,
         }
     )
-    
+
     m5: Dict[str, float] = field(
         default_factory=lambda: {
             "Y": 24.0,
