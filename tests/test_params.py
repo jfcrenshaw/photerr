@@ -112,6 +112,7 @@ def test_param_val_dict() -> None:
         ({"nYrObs": -1}, ValueError),
         ({"extendedType": "auto", "theta": {}}, ValueError),
         ({"extendedType": "auto", "aMin": 3, "aMax": 2}, ValueError),
+        ({"renameDict": -1}, TypeError),
     ],
 )
 def test_bad_params(params: dict, error: Exception) -> None:
