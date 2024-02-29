@@ -470,6 +470,7 @@ def test_scale(highSNR: bool) -> None:
     # but u band of low SNR is doubled
     np.allclose(ratio[1, 0], 2)
 
+
 def test_limiting_mags() -> None:
     """Compare V1 limiting mags to the values in Table 2 of Ivezic 2019."""
     # get the limiting mags from the error model
@@ -480,4 +481,3 @@ def test_limiting_mags() -> None:
     ivezic2019 = dict(u=23.78, g=24.81, r=24.35, i=23.92, z=23.34, y=22.45)
     for band in m5:
         assert np.isclose(m5[band], ivezic2019[band], rtol=1e-3)
-
