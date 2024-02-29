@@ -107,7 +107,7 @@ class LsstErrorParamsV1(ErrorParams):
 
 
 class LsstErrorModelV1(ErrorModel):
-    """Photometric error model for Euclid."""
+    """Photometric error model for LSST, version 1."""
 
     def __init__(self, **kwargs: Any) -> None:
         """Create an LSST error model.
