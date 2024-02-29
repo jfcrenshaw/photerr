@@ -33,7 +33,7 @@ param_docstring = """
     airmass : dict or float
         The airmass in each band.
     Cm : dict or float
-        System contribution to the limiting magnitude in each band that is 
+        System contribution to the limiting magnitude in each band that is
         independent of observing conditions.
     dCmInf : dict or float
         The change in Cm in the limit of infinite visit time. This parameter
