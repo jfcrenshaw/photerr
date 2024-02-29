@@ -1,39 +1,55 @@
 """Parameter objects for the error model."""
+
 from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import InitVar, dataclass, field
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 import numpy as np
 
 param_docstring = """
 
+    Note for all the dictionary parameters below, you can pass a float
+    instead and that value will be used for all bands. However at least
+    one of these parameters must be a dictionary so that the model can
+    infer the band names.
+
     Parameters
     ----------
     nYrObs : float
         Number of years of observations
-    nVisYr : dict
+    nVisYr : dict or float
         Mean number of visits per year in each band
-    gamma : dict
+    gamma : dict or float
         A band dependent parameter defined in Ivezic 2019
-    m5 : dict
+    m5 : dict or float
         A dictionary of single visit 5-sigma limiting magnitudes. For any
         bands for which you pass a value in m5, this will be the 5-sigma
         limiting magnitude used, and any values for that band in Cm, msky,
         theta, and km will be ignored.
-    tvis : float
-        Exposure time in seconds for a single visit
-    airmass : float
-        The fiducial airmass
-    Cm : dict
-        A band dependent parameter defined in Ivezic 2019
-    msky : dict
-        Median zenith sky brightness in each band, in AB mag / arcsec^2.
-    theta : dict
-        Median zenith seeing FWHM in arcseconds for each band
-    km : dict
-        Atmospheric extinction in each band
+    tvis : dict or float
+        Exposure time in seconds for a single visit in each band.
+    airmass : dict or float
+        The airmass in each band.
+    Cm : dict or float
+        System contribution to the limiting magnitude in each band that is
+        independent of observing conditions.
+    dCmInf : dict or float
+        The change in Cm in the limit of infinite visit time. This parameter
+        only matters if tvis differs from tvisRef.
+    msky : dict or float
+        Zenith sky brightness in each band, in AB mag / arcsec^2.
+    mskyDark : dict or float
+        Zenith dark sky brightness in each band, in AB mag / arcsec^2.
+    theta : dict or float
+        Median zenith seeing FWHM in arcseconds for each band. This corresponds
+        to seeingFwhmEff from OpSim runs.
+    km : dict or float
+        Atmospheric extinction at zenith in each band.
+    tvisRef : float
+        Reference exposure time used with tvis to scale read noise. This
+        must correspond to the visit time used for the calculation of Cm.
     sigmaSys : float; default=0.005
         The irreducible error of the system in AB magnitudes. Sets the minimum
         photometric error.
@@ -122,12 +138,14 @@ param_docstring = """
     nVisYr and gamma for every band you wish to calculate errors for. In addition,
     you must provide either:
     - the single-visit 5-sigma limiting magnitude in the m5 dictionary
-    - tvis and airmass, plus per-band parameters in the Cm, msky, theta, and km
-        dictionaries, which are used to calculate the limiting magnitudes using
-        Eq. 6 from Ivezic 2019.
+    - tvis, airmass, Cm, dCmInf, msky, mskyDark, theta, and km, which are used
+        to calculate the limiting magnitudes using Eq. 6 of Ivezic 2019 and
+        Eq. 2-3 of Bianco 2022.
 
     Note if for any bands you pass a value in the m5 dictionary, the model will use
-    that value for that band, regardless of the values in Cm, msky, theta, and km.
+    that value for that band, regardless of the values in tvis, airmass, Cm, dCmInf,
+    msky, mskyDark, theta, and km. However you must still provide airmass and theta
+    if you wish to calculate errors for extended sources.
 
     When instantiating the ErrorParams object, it will determine which bands it has
     enough information to calculate errors for, and throw away all of the extraneous
@@ -138,6 +156,7 @@ param_docstring = """
     References
     ----------
     Ivezic 2019 - https://arxiv.org/abs/0805.2366
+    Bianco 2022 - https://pstn-054.lsst.io
     van den Busch 2020 - http://arxiv.org/abs/2007.01846
     Kuijken 2019 - https://arxiv.org/abs/1902.11265
 """
@@ -150,12 +169,15 @@ _val_dict = {
     "nVisYr": [True, [int, float], [], False],
     "gamma": [True, [int, float], [], False],
     "m5": [True, [int, float], [], True],
-    "tvis": [False, [int, float, type(None)], [], False],
-    "airmass": [False, [int, float, type(None)], [], False],
-    "Cm": [True, [int, float], [], False],
+    "tvis": [True, [int, float], [], False],
+    "airmass": [True, [int, float], [], False],
+    "Cm": [True, [int, float], [], True],
+    "dCmInf": [True, [int, float], [], True],
     "msky": [True, [int, float], [], True],
+    "mskyDark": [True, [int, float], [], True],
     "theta": [True, [int, float], [], False],
     "km": [True, [int, float], [], False],
+    "tvisRef": [False, [int, float, type(None)], [], False],
     "sigmaSys": [False, [int, float], [], False],
     "sigLim": [False, [int, float], [], False],
     "ndMode": [False, [str], ["flag", "sigLim"], None],
@@ -180,18 +202,21 @@ class ErrorParams:
     __doc__ += param_docstring
 
     nYrObs: float
-    nVisYr: Dict[str, float]
-    gamma: Dict[str, float]
+    nVisYr: dict[str, float]
+    gamma: dict[str, float]
 
-    m5: Dict[str, float] = field(default_factory=lambda: {})
+    m5: dict[str, float] | float = field(default_factory=lambda: {})
 
-    tvis: Optional[float] = None
-    airmass: Optional[float] = None
-    Cm: Dict[str, float] = field(default_factory=lambda: {})
-    msky: Dict[str, float] = field(default_factory=lambda: {})
-    theta: Dict[str, float] = field(default_factory=lambda: {})
-    km: Dict[str, float] = field(default_factory=lambda: {})
+    tvis: dict[str, float] | float = field(default_factory=lambda: {})
+    airmass: dict[str, float] | float = field(default_factory=lambda: {})
+    Cm: dict[str, float] | float = field(default_factory=lambda: {})
+    dCmInf: dict[str, float] | float = field(default_factory=lambda: {})
+    msky: dict[str, float] | float = field(default_factory=lambda: {})
+    mskyDark: dict[str, float] | float = field(default_factory=lambda: {})
+    theta: dict[str, float] | float = field(default_factory=lambda: {})
+    km: dict[str, float] | float = field(default_factory=lambda: {})
 
+    tvisRef: float | None = None
     sigmaSys: float = 0.005
 
     sigLim: float = 0
@@ -207,20 +232,20 @@ class ErrorParams:
 
     decorrelate: bool = True
     highSNR: bool = False
-    scale: Dict[str, float] = field(default_factory=lambda: {})
+    scale: dict[str, float] | float = field(default_factory=lambda: {})
 
     errLoc: str = "after"
 
-    renameDict: InitVar[Optional[Dict[str, str]]] = None
+    renameDict: InitVar[dict[str, str] | None] = None
     validate: InitVar[bool] = True
 
-    def __post_init__(
-        self, renameDict: Union[Dict[str, str], None], validate: bool
-    ) -> None:
+    def __post_init__(self, renameDict: dict[str, str] | None, validate: bool) -> None:
         """Rename bands and remove duplicate parameters."""
-        # if renameDict was provided, rename the bands
-        if renameDict is not None:
-            self.rename_bands(renameDict)
+        # make sure all dictionaries are dictionaries
+        self._convert_to_dict()
+
+        # rename the bands
+        self.rename_bands(renameDict)
 
         # validate the parameters
         if validate:
@@ -232,15 +257,42 @@ class ErrorParams:
         # if using extended error types,
         if self.extendedType == "auto" or self.extendedType == "gaap":
             # make sure theta is provided for every band
-            if set(self.theta.keys()) != set(self.nVisYr.keys()):
+            if set(self.theta.keys()) != set(self.nVisYr.keys()) or set(
+                self.airmass.keys()
+            ) != set(self.airmass.keys()):
                 raise ValueError(
                     "If using one of the extended error types "
                     "(i.e. extendedType == 'auto' or 'gaap'), "
-                    "then theta must contain an entry for every band."
+                    "then theta and airmass must be provided "
+                    "for every band."
                 )
             # make sure that aMin < aMax
             elif self.aMin > self.aMax:
                 raise ValueError("aMin must be less than aMax.")
+
+    def _convert_to_dict(self) -> None:
+        """For dict parameters that aren't dicts, convert to dicts."""
+        # first loop over all the parameters and get a list of every band
+        bands = []
+        for param in self.__dict__.values():
+            if isinstance(param, dict):
+                bands.extend(list(param.keys()))
+        bands = list(set(bands))
+
+        if len(bands) == 0:
+            raise ValueError(
+                "At least one of the dictionary parameters "
+                "must actually be a dictionary."
+            )
+
+        # now loop over all the params and convert floats to dictionaries
+        for key, (is_dict, *_) in _val_dict.items():
+            # get the parameter saved under the key
+            param = self.__dict__[key]
+
+            # if it should be a dictionary but it's not
+            if is_dict and not isinstance(param, dict):
+                self.__dict__[key] = {band: param for band in bands}
 
     def _clean_dictionaries(self) -> None:
         """Remove unnecessary info from all of the dictionaries.
@@ -263,7 +315,7 @@ class ErrorParams:
         for key, param in self.__dict__.items():
             # get the parameters that are dictionaries
             if isinstance(param, dict) and key not in ignore_dicts:
-                if key != "theta":
+                if key != "theta" and key != "airmass":
                     # remove bands that we have explicit m5's for
                     self.__dict__[key] = {
                         band: val for band, val in param.items() if band not in self.m5
@@ -285,11 +337,11 @@ class ErrorParams:
         if len(all_bands) == 0:
             raise ValueError(
                 "There are no bands left! You probably set one of the dictionary "
-                "parameters (i.e. nVisYr, gamma, m5, Cm, msky, theta, or km) such "
-                "that there was not enough info to calculate errors for any of the "
-                "photometric bands. Remember that for each band, you must have an "
+                "parameters (i.e. nVisYr, gamma, m5, Cm, dCmInf, msky, theta, or km) "
+                "such that there was not enough info to calculate errors for any of "
+                "the photometric bands. Remember that for each band, you must have an "
                 "entry in nVisYr and gamma, plus either an entry in m5 or an entry "
-                "in all of Cm, msky, theta, and km."
+                "in all of Cm, dCmInf, msky, theta, and km."
             )
 
         # finally, fill out the rest of the scale dictionary
@@ -298,7 +350,7 @@ class ErrorParams:
             for band in self.nVisYr
         }
 
-    def rename_bands(self, renameDict: Dict[str, str]) -> None:
+    def rename_bands(self, renameDict: dict[str, str]) -> None:
         """Rename the bands used in the error model.
 
         This method might be useful if you want to use the default parameters for an
@@ -310,15 +362,20 @@ class ErrorParams:
             A dictionary containing key: value pairs {old_name: new_name}.
             For example map={"u": "lsst_u"} will rename the u band to lsst_u.
         """
+        if renameDict is None:
+            return
+        if not isinstance(renameDict, dict):
+            raise TypeError("renameDict must be a dict or None.")
+
         # loop over every parameter
         for key, param in self.__dict__.items():
             # get the parameters that are dictionaries
             if isinstance(param, dict):
                 # rename bands in-place
                 self.__dict__[key] = {
-                    old_name
-                    if old_name not in renameDict
-                    else renameDict[old_name]: val
+                    (
+                        old_name if old_name not in renameDict else renameDict[old_name]
+                    ): val
                     for old_name, val in param.items()
                 }
 

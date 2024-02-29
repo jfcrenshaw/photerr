@@ -10,6 +10,7 @@ from photerr import (
     ErrorModel,
     EuclidErrorModel,
     LsstErrorModel,
+    LsstErrorModelV1,
     LsstErrorParams,
     RomanErrorModel,
 )
@@ -341,6 +342,10 @@ def test_bad_instantiation() -> None:
 
 def test_other_models(data: pd.DataFrame) -> None:
     """Test instantiating other models and calculating errors."""
+
+    lsstData = LsstErrorModelV1()(data, 0)
+    assert lsstData.shape == (data.shape[0], data.shape[1] + 1)
+
     euclidData = EuclidErrorModel()(data, 0)
     assert euclidData.shape == (data.shape[0], data.shape[1] + 1)
 
@@ -374,7 +379,9 @@ def test_alternate_instantiation() -> None:
 @pytest.mark.parametrize("extendedType", ["point", "auto", "gaap"])
 @pytest.mark.parametrize("highSNR", [True, False])
 def test_mag_nsr_inversion(
-    extendedType: str, highSNR: bool, lsst_data: pd.DataFrame
+    extendedType: str,
+    highSNR: bool,
+    lsst_data: pd.DataFrame,
 ) -> None:
     """Test that the mag->nsr and nsr->mag methods are inverses."""
     # get the arrays of data
@@ -462,3 +469,15 @@ def test_scale(highSNR: bool) -> None:
 
     # but u band of low SNR is doubled
     np.allclose(ratio[1, 0], 2)
+
+
+def test_limiting_mags() -> None:
+    """Compare V1 limiting mags to the values in Table 2 of Ivezic 2019."""
+    # get the limiting mags from the error model
+    errM = LsstErrorModelV1(airmass=1)
+    m5 = errM.getLimitingMags(coadded=False)
+
+    # compare to the Ivezic 2019 values
+    ivezic2019 = dict(u=23.78, g=24.81, r=24.35, i=23.92, z=23.34, y=22.45)
+    for band in m5:
+        assert np.isclose(m5[band], ivezic2019[band], rtol=1e-3)

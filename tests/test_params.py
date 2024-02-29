@@ -134,3 +134,21 @@ def test_missing_theta() -> None:
     """Test fail if we have extended error but don't have theta for everyone."""
     with pytest.raises(ValueError):
         LsstErrorParams(extendedType="auto", theta={"g": 0.1}, m5={"u": 23})
+
+
+def test_all_dicts_are_floats() -> None:
+    """Test that instantiation fails if all dictionaries are floats."""
+    with pytest.raises(ValueError):
+        LsstErrorParams(
+            nVisYr=1,
+            gamma=1,
+            m5=1,
+            tvis=1,
+            airmass=1,
+            Cm=1,
+            dCmInf=1,
+            msky=1,
+            mskyDark=1,
+            theta=1,
+            km=1,
+        )

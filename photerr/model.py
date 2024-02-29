@@ -1,5 +1,6 @@
 """The photometric error model."""
-from typing import Any, Tuple, Union
+
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -51,7 +52,7 @@ class ErrorModel:
             self._params.update(**kwargs)
 
         # make a list of the bands
-        self._bands = [band for band in self._params.nVisYr.keys()]
+        self._bands = list(self._params.nVisYr.keys())
 
         # calculate all of the 5-sigma limiting magnitudes
         self._calculate_m5()
@@ -64,25 +65,46 @@ class ErrorModel:
     def _calculate_m5(self) -> None:
         """Calculate the single-visit 5-sigma limiting magnitudes.
 
-        Uses Eq. 6 from Ivezic 2019.
-        However, if m5 has been explicitly passed for any bands, those values are
-        used instead.
+        Uses Eq. 6 from Ivezic 2019 and Eq. 2-3 of Bianco 2022.
+        However, if m5 has been explicitly passed for any bands,
+        those values are used instead.
         """
-        # calculate the m5 limiting magnitudes using Eq. 6
-        m5 = {
-            band: self.params.Cm[band]
-            + 0.50 * (self.params.msky[band] - 21)
-            + 2.5 * np.log10(0.7 / self.params.theta[band])
-            + 1.25 * np.log10(self.params.tvis / 30)
-            - self.params.km[band] * (self.params.airmass - 1)
-            for band in self.params.Cm
-        }
+        # calculate m5 for the bands with the requisite info
+        m5 = {}
+        for band in self.params.Cm:
+            # calculate the scaled visit time using Eq. 3 of Bianco 2022
+            tau = (
+                self.params.tvis[band]
+                / self.params.tvisRef
+                * 10 ** ((self.params.msky[band] - self.params.mskyDark[band]) / -2.5)
+            )
+
+            # calculate Cm exposure time adjustment using Eq. 2 from Bianco 2022
+            dCmTau = self.params.dCmInf[band] - 1.25 * np.log10(
+                1 + (10 ** (0.8 * self.params.dCmInf[band]) - 1) / tau
+            )
+
+            # calculate m5 using Eq. 6 from Ivezic 2019 and Eq. 2 from Bianco 2022
+            m5[band] = (
+                self.params.Cm[band]
+                + 0.50 * (self.params.msky[band] - 21)
+                + 2.5 * np.log10(0.7 / self.params.theta[band])
+                + 1.25 * np.log10(self.params.tvis[band] / 30)
+                - self.params.km[band] * (self.params.airmass[band] - 1)
+                + dCmTau
+            )
+
+        # add the explicitly passed m5's to our dictionary
         m5.update(self.params.m5)
 
+        # save all the single-visit m5's together
         self._all_m5 = {band: m5[band] for band in self._bands}
 
     def _get_area_ratio_auto(
-        self, majors: np.ndarray, minors: np.ndarray, bands: list
+        self,
+        majors: np.ndarray,
+        minors: np.ndarray,
+        bands: list,
     ) -> np.ndarray:
         """Get the ratio between PSF area and galaxy aperture area for "auto" model.
 
@@ -102,6 +124,8 @@ class ErrorModel:
         """
         # get the psf size for each band
         psf_size = np.array([self.params.theta[band] for band in bands])
+        airmass = np.array([self.params.airmass[band] for band in bands])
+        psf_size *= airmass**0.6
 
         # convert PSF FWHM to Gaussian sigma
         psf_sig = psf_size / 2.355
@@ -118,7 +142,10 @@ class ErrorModel:
         return A_ap / A_psf
 
     def _get_area_ratio_gaap(
-        self, majors: np.ndarray, minors: np.ndarray, bands: list
+        self,
+        majors: np.ndarray,
+        minors: np.ndarray,
+        bands: list,
     ) -> np.ndarray:
         """Get the ratio between PSF area and galaxy aperture area for "gaap" model.
 
@@ -138,6 +165,8 @@ class ErrorModel:
         """
         # get the psf size for each band
         psf_size = np.array([self.params.theta[band] for band in bands])
+        airmass = np.array([self.params.airmass[band] for band in bands])
+        psf_size *= airmass**0.6
 
         # convert PSF FWHM to Gaussian sigma
         psf_sig = psf_size / 2.355
@@ -165,7 +194,11 @@ class ErrorModel:
         return A_ap / A_psf
 
     def _get_nsr_from_mags(
-        self, mags: np.ndarray, majors: np.ndarray, minors: np.ndarray, bands: list
+        self,
+        mags: np.ndarray,
+        majors: np.ndarray,
+        minors: np.ndarray,
+        bands: list,
     ) -> np.ndarray:
         """Calculate the noise-to-signal ratio.
 
@@ -320,7 +353,7 @@ class ErrorModel:
         minors: np.ndarray,
         bands: list,
         rng: np.random.Generator,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Calculate the noise-to-signal ratio.
 
         Uses Eqs 4 and 5 from Ivezic 2019.
@@ -391,7 +424,9 @@ class ErrorModel:
         return obsMags, obsMagErrs
 
     def __call__(
-        self, catalog: pd.DataFrame, random_state: Union[np.random.Generator, int]
+        self,
+        catalog: pd.DataFrame,
+        random_state: np.random.Generator | int | None = None,
     ) -> pd.DataFrame:
         """Calculate photometric errors for the catalog and return in DataFrame.
 
@@ -399,10 +434,10 @@ class ErrorModel:
         ----------
         catalog : pd.DataFrame
             The input catalog of galaxies in a pandas DataFrame.
-        random_sate : np.random.Generator or int
+        random_sate : np.random.Generator, int, or None
             The random state. Can either be a numpy random generator
-            (e.g. np.random.default_rng(42)), or an integer, which is then used
-            to seed np.random.default_rng.
+            (e.g. np.random.default_rng(42)), an integer (which is used
+            to seed np.random.default_rng), or None.
 
         Returns
         -------
@@ -411,10 +446,12 @@ class ErrorModel:
         # set the rng
         if isinstance(random_state, np.random.Generator):
             rng = random_state
-        elif isinstance(random_state, int):
+        elif isinstance(random_state, int) or random_state is None:
             rng = np.random.default_rng(random_state)
         else:
-            raise TypeError("random_state must be a numpy random generator or an int.")
+            raise TypeError(
+                "random_state must be a numpy random generator, an int, or None."
+            )
 
         # get the bands we will calculate errors for
         bands = [band for band in catalog.columns if band in self._bands]
@@ -468,7 +505,10 @@ class ErrorModel:
         return obsCatalog
 
     def getLimitingMags(
-        self, nSigma: float = 5, coadded: bool = True, aperture: float = 0
+        self,
+        nSigma: float = 5,
+        coadded: bool = True,
+        aperture: float = 0,
     ) -> dict:
         """Return the limiting magnitudes in all bands.
 
@@ -507,4 +547,5 @@ class ErrorModel:
         )
 
     def __repr__(self) -> str:  # pragma: no cover
+        """Print the error model parameters."""
         return "Photometric error model with parameters:\n\n" + str(self.params)
