@@ -473,7 +473,7 @@ class ErrorParams:
             if isinstance(param, dict) and not is_dict:
                 raise TypeError(f"{key} should not be a dictionary.")
             elif not isinstance(param, dict) and is_dict:
-                raise TypeError(f"{key} should be a dictionary.")
+                raise TypeError(f"{key} should be a dictionary.")  # pragma: no cover
             if is_dict:
                 # loop over contents and check types and values
                 for subkey, subparam in param.items():
