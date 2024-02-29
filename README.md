@@ -88,8 +88,8 @@ If you are changing other dictionary-parameters at the same time (e.g. `nVisYr`,
 
 By default, PhotErr tries to use the provided information to calculate limiting magnitudes for you.
 If you would like to directly supply your own $5\sigma$ limits, you can do so using the `m5` parameter.
-Note that PhotErr assumes these are single-visit limiting magnitudes.
-If you want to supply coadded depths, you should also set `nYrObs=1` and `nVisYr={u: 1, g: 1, ...}`, so that the calculated coadded depths are equal to those you provided.
+Note PhotErr assumes these are single-visit point-source limiting magnitudes.
+If you want to supply coadded depths, you should also set `nYrObs=1` and `nVisYr=1`, so that the calculated coadded depths are equal to those you provided.
 
 ### *Handling non-detections*
 
@@ -120,12 +120,12 @@ You can also calculate limiting magnitudes for apertures of a given size by pass
 
 ### Scaling the errors
 
-If you want to scale up or scale down the errors in any band(s), you can use the keyword `scale`. 
+If you want to scale up or scale down the errors in any band(s), you can use the keyword `scale`.
 For example, `LsstErrorModel(scale={"u": 2, "y": 2})` will have all the same properties of the default error model, except the errors in the `u` and `y` bands will be doubled.
 This allows you to answer questions like "what happens to my science if the `u` band errors are doubled."
 
 Note this only scales the band-specific error.
-The band-independent systematic error floor, `sigmaSys` is still the same, and so at high-SNR, near the systematic floor, the errors won't scale as you expect.
+The band-independent systematic error floor, `sigmaSys` is still the same, and so at high-SNR near the systematic floor, the errors won't scale as you expect.
 
 ### *Other error models*
 
@@ -169,7 +169,7 @@ In PhotErr, we do not make this approximation so that the error model generalize
 In addition, while the high-SNR model assumes photometric errors are Gaussian in magnitude space, we model errors as Gaussian in flux space.
 However, both of these high-SNR approximations can be restored with the keyword `highSNR=True`.
 
-The LSST error model uses the parameters from [Ivezic (2019)](https://arxiv.org/abs/0805.2366).
+The LSST error model uses parameters from [Ivezic (2019)](https://arxiv.org/abs/0805.2366), [Bianco 2022](https://pstn-054.lsst.io), and from [this Rubin systems engineering notebook](https://github.com/lsst-pst/syseng_throughputs/blob/main/notebooks/EvalReadnoise.ipynb).
 The Euclid and Roman error models follow [Graham (2020)](https://arxiv.org/abs/2004.07885) in setting $\gamma = 0.04$, which is nearly identical to the values for Rubin (which are all $\sim 0.039$).
 
 In addition to the random photometric error above, we include a system error of $\sigma_\text{sys} = 0.005$ which is added in quadrature to random error. Note that the system error can be changed using the keyword `sigmaSys`.
