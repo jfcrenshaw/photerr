@@ -2,6 +2,7 @@
 
 The base ErrorModel object is mainly tested implicitly via LsstErrorModel.
 """
+
 import numpy as np
 import pandas as pd
 import pytest

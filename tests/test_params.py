@@ -2,6 +2,7 @@
 
 The base ErrorParams object is only tested implicitly via LsstErrorParams.
 """
+
 import pytest
 
 from photerr import LsstErrorParams
