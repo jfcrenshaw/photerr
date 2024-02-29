@@ -2,6 +2,7 @@
 
 The base ErrorModel object is mainly tested implicitly via LsstErrorModel.
 """
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -92,8 +93,8 @@ def test_random_state(data: pd.DataFrame) -> None:
 def test_increasing_error(params: dict, data: pd.DataFrame) -> None:
     """Test that error magnitudes respond to parameters as expected."""
     data = data.iloc[:2]
-    default_errs = LsstErrorModel()(data, random_state=0)
-    greater_errs = LsstErrorModel(**params)(data, random_state=0)
+    default_errs = LsstErrorModelV1()(data, random_state=0)
+    greater_errs = LsstErrorModelV1(**params)(data, random_state=0)
     assert all(greater_errs["g_err"] > default_errs["g_err"])
 
 

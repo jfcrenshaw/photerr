@@ -12,10 +12,9 @@ from .roman import RomanErrorModel, RomanErrorParams
 __version__ = metadata.version(__package__)
 del metadata
 
+
 # alias the latest LSST error model
-class LsstErrorParams(LsstErrorParamsV2):
-    ...
+class LsstErrorParams(LsstErrorParamsV2): ...
 
 
-class LsstErrorModel(LsstErrorModelV2):
-    ...
+class LsstErrorModel(LsstErrorModelV2): ...
