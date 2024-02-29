@@ -426,7 +426,7 @@ class ErrorModel:
     def __call__(
         self,
         catalog: pd.DataFrame,
-        random_state: np.random.Generator | int,
+        random_state: np.random.Generator | int | None = None,
     ) -> pd.DataFrame:
         """Calculate photometric errors for the catalog and return in DataFrame.
 
@@ -434,10 +434,10 @@ class ErrorModel:
         ----------
         catalog : pd.DataFrame
             The input catalog of galaxies in a pandas DataFrame.
-        random_sate : np.random.Generator or int
+        random_sate : np.random.Generator, int, or None
             The random state. Can either be a numpy random generator
-            (e.g. np.random.default_rng(42)), or an integer, which is then used
-            to seed np.random.default_rng.
+            (e.g. np.random.default_rng(42)), an integer (which is used
+            to seed np.random.default_rng), or None.
 
         Returns
         -------
@@ -446,10 +446,12 @@ class ErrorModel:
         # set the rng
         if isinstance(random_state, np.random.Generator):
             rng = random_state
-        elif isinstance(random_state, int):
+        elif isinstance(random_state, int) or random_state is None:
             rng = np.random.default_rng(random_state)
         else:
-            raise TypeError("random_state must be a numpy random generator or an int.")
+            raise TypeError(
+                "random_state must be a numpy random generator, an int, or None."
+            )
 
         # get the bands we will calculate errors for
         bands = [band for band in catalog.columns if band in self._bands]
