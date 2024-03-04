@@ -21,7 +21,7 @@ PhotErr is available on PyPI and can be installed with pip:
 pip install photerr
 ```
 
-Note that PhotErr requires Python >= 3.8.
+Note that PhotErr requires Python >= 3.10.
 
 Once installed, you can import the error models. For example, to use the default LSST error model,
 

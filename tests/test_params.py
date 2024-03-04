@@ -3,6 +3,7 @@
 The base ErrorParams object is only tested implicitly via LsstErrorParams.
 """
 
+import numpy as np
 import pytest
 
 from photerr import LsstErrorParams
@@ -154,3 +155,7 @@ def test_all_dicts_are_floats() -> None:
             theta=1,
             km=1,
         )
+
+
+def test_validate_params_with_numpy_float() -> None:
+    LsstErrorParams(m5={"u": np.array([23.0])[0]})
