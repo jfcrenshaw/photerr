@@ -437,7 +437,7 @@ class ErrorParams:
         """Check that this single parameter has the correct type/value."""
         name = key if subkey is None else f"{key}.{subkey}"
 
-        if type(param) not in allowed_types:
+        if not any([isinstance(param, t) for t in allowed_types]):
             raise TypeError(
                 f"{name} is of type {type(param).__name__}, but should be "
                 f"of type {', '.join(t.__name__ for t in allowed_types)}."
