@@ -33,7 +33,12 @@ class RomanErrorParams(ErrorParams):
 
 
 class RomanErrorModel(ErrorModel):
-    """Photometric error model for Roman."""
+    """Photometric error model for Roman.
+
+    Below is the parameter docstring:
+    """
+
+    __doc__ += RomanErrorParams.__doc__
 
     def __init__(self, **kwargs: Any) -> None:
         """Create a Roman error model.

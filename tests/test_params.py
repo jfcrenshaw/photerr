@@ -158,4 +158,5 @@ def test_all_dicts_are_floats() -> None:
 
 
 def test_validate_params_with_numpy_float() -> None:
+    """Test that numpy floats don't fail validation for primitive floats."""
     LsstErrorParams(m5={"u": np.array([23.0])[0]})

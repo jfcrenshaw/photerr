@@ -12,7 +12,7 @@ class EuclidErrorParams(ErrorParams):
     """Parameters for the Euclid photometric error model.
 
     gamma and limiting magnitudes taken from page 4 of Graham 2020.
-    nYrObs and nVisYr set = 1, assuming that Roman is point-and-stare.
+    nYrObs and nVisYr set = 1, assuming that Euclid is point-and-stare.
     """
 
     __doc__ += param_docstring
@@ -32,7 +32,12 @@ class EuclidErrorParams(ErrorParams):
 
 
 class EuclidErrorModel(ErrorModel):
-    """Photometric error model for Euclid."""
+    """Photometric error model for Euclid.
+
+    Below is the parameter docstring:
+    """
+
+    __doc__ += EuclidErrorParams.__doc__
 
     def __init__(self, **kwargs: Any) -> None:
         """Create a Euclid error model.

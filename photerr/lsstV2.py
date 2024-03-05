@@ -128,7 +128,12 @@ class LsstErrorParamsV2(ErrorParams):
 
 
 class LsstErrorModelV2(ErrorModel):
-    """Photometric error model for LSST, version 2."""
+    """Photometric error model for LSST, version 2.
+
+    Below is the parameter docstring:
+    """
+
+    __doc__ += LsstErrorParamsV2.__doc__
 
     def __init__(self, **kwargs: Any) -> None:
         """Create an LSST error model.

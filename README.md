@@ -46,21 +46,16 @@ errModel.getLimitingMags(nSigma=1, coadded=False) # single-image point-source 1-
 # Tweaking the error model
 
 There are many parameters you can tweak to fine tune the error model.
-To see all available parameters, you can either call help on the error model's `params` object,
+To see all available parameters, check the docstring of either the error model or parameters object.
+For example,
 
 ```python
-help(errModel.params)
-```
-
-or look at the docstring of the corresponding parameters object,
-
-```python
-from photerr import LsstErrorParams
-help(LsstErrorParams)
+from photerr import LsstErrorModel
+help(LsstErrorModel)
 ```
 
 All model parameters can be overridden using keyword arguments to the error model constructor.
-Below, we explain a few of the more commonly tweaked parameters.
+Below, we explain in detail a few of the more commonly tweaked parameters.
 
 ### *Changing the observing duration*
 
@@ -74,8 +69,8 @@ errModel = LsstErrorModel(nYrObs=1)
 ### *Changing the band names*
 
 Another parameter you might want to tweak is the name of the bands.
-By default, the `LsstErrorModel` assumes that the LSST bands are named `u`, `g`, etc.
-If instead, the bands in your catalog are named `lsst_u`, `lsst_g`, etc., then you can instantiate the error model with a rename dictionary:
+By default, the `LsstErrorModel` assumes the LSST bands are named `u`, `g`, `r`, etc.
+If instead, the bands in your catalog are named `lsst_u`, `lsst_g`, `lsst_r`, etc., you can instantiate the error model with a rename dictionary:
 
 ```python
 errModel = LsstErrorModel(renameDict={"u": "lsst_u", "g": "lsst_g", ...})
@@ -89,43 +84,44 @@ If you are changing other dictionary-parameters at the same time (e.g. `nVisYr`,
 By default, PhotErr tries to use the provided information to calculate limiting magnitudes for you.
 If you would like to directly supply your own $5\sigma$ limits, you can do so using the `m5` parameter.
 Note PhotErr assumes these are single-visit point-source limiting magnitudes.
-If you want to supply coadded depths, you should also set `nYrObs=1` and `nVisYr=1`, so that the calculated coadded depths are equal to those you provided.
+If you want to supply coadded depths, you should also set `nYrObs=1` and `nVisYr=1`, so the calculated coadded depths are equal to those you provided.
 
 ### *Handling non-detections*
 
 The other big thing you may want to change is how the error model identifies and handles non-detections.
 
 The error model has a parameter named `sigLim`, which sets the limit for non-detections.
-By default, `sigLim=0`, which means that only negative fluxes count as non-detections, however if you set `sigLim=1`, then any magnitudes beyond the 1-sigma limit in each band will count as a non-detection.
+By default `sigLim=0`, which means only negative fluxes count as non-detections, however if you set `sigLim=1`, any magnitudes beyond the 1-sigma limit in each band will count as a non-detection.
 You can set `sigLim` to any non-negative float.
 
 The `ndMode` parameter tells the error model how to handle the non-detections.
-By default, `ndMode="flag"`, which means that the model will flag non-detections with the value set by `ndFlag`, which defaults to `np.inf`.
+By default `ndMode="flag"`, which means the model will flag non-detections with the value set by `ndFlag`, which defaults to `np.inf`.
 However, you can also set `ndMode="sigLim"`, in which case the model will set all non-detections to the n-sigma limits set by the `sigLim` parameter described in the previous paragraph.
 Remember that `sigLim` also sets the detection threshold, so in effect, any galaxy magnitudes beyond the detection threshold will be set equal to the detection threshold.
 
 One other option is provided by the `absFlux` parameter.
-If `absFlux=True`, then the absolute value of all fluxes are taken before converting back to magnitudes.
+If `absFlux=True`, the absolute value of all fluxes are taken before converting back to magnitudes.
 If combined with `sigLim=0`, this means every galaxy will have an observed flux in every band.
-This is useful if you do not want to worry about non-detections, but it results in a non-Gaussian error distribution for low-SNR sources.
+This is useful if you do not want to worry about non-detections, but it results in a non-Gaussian error distribution for the flux of low-SNR sources.
 
-### Errors for extended sources
+### *Errors for extended sources*
 
 PhotErr can be used to calculate errors for extended sources as well.
 You just have to pass `extendedType="auto"` or `extendedType="gaap"` to the constructor (see explanation below for the differences in these models).
 PhotErr will then look for columns in the input DataFrame that correspond to the semi-major and -minor axes of the objects, corresponding to half-light radii in arcseconds.
-By default, it looks for these in columns titled "major" and "minor", but you can change the names of these columns using the `majorCol` and `minorCol` keywords.
+By default it looks for these in columns titled "major" and "minor", but you can change the names of these columns using the `majorCol` and `minorCol` keywords.
 
 You can also calculate limiting magnitudes for apertures of a given size by passing the `aperture` keyword to `errModel.getLimitingMags()`
 
-### Scaling the errors
+### *Scaling the errors*
 
 If you want to scale up or scale down the errors in any band(s), you can use the keyword `scale`.
 For example, `LsstErrorModel(scale={"u": 2, "y": 2})` will have all the same properties of the default error model, except the errors in the `u` and `y` bands will be doubled.
 This allows you to answer questions like "what happens to my science if the `u` band errors are doubled."
 
-Note this only scales the band-specific error.
-The band-independent systematic error floor, `sigmaSys` is still the same, and so at high-SNR near the systematic floor, the errors won't scale as you expect.
+Note it is the flux error that is doubled.
+This also only scales the band-specific error.
+The band-independent systematic error floor, `sigmaSys` is still the same, and so at high-SNR near the systematic floor the errors won't scale as you expect.
 
 ### *Other error models*
 
@@ -134,7 +130,9 @@ Each of these models also have corresponding parameter objects: `EuclidErrorPara
 
 You can also start with the base error model, `ErrorModel`, which is not defaulted for any specific survey.
 To instantiate `ErrorModel`, there are several required arguments that you must supply.
-To see a list and explanation of these arguments, see the docstring for `ErrorParams`.
+To see a list and explanation of these arguments, see the docstring for `ErrorModel`.
+However, the easiest way to create a new model is to supply `nYrObs`, `nVisYr`, `gamma`, and `m5`.
+You might need to fit `gamma` to match the expected errors, however a good default guess is `0.04`.
 
 # Explanation of the error model
 
