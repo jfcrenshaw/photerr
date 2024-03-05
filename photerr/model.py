@@ -11,12 +11,10 @@ from photerr.params import ErrorParams
 class ErrorModel:
     """Base error model from Ivezic 2019.
 
-    References
-    ----------
-    Ivezic 2019 - https://arxiv.org/abs/0805.2366
-    van den Busch 2020 - http://arxiv.org/abs/2007.01846
-    Kuijken 2019 - https://arxiv.org/abs/1902.11265
+    Below is the parameter docstring:
     """
+
+    __doc__ += ErrorParams.__doc__
 
     def __init__(self, *args: ErrorParams, **kwargs: Any) -> None:
         """Create an error model using the passed ErrorParams or keyword overrides.

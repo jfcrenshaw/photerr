@@ -9,7 +9,6 @@ from typing import Any
 import numpy as np
 
 param_docstring = """
-
     Note for all the dictionary parameters below, you can pass a float
     instead and that value will be used for all bands. However at least
     one of these parameters must be a dictionary so that the model can
@@ -164,34 +163,34 @@ param_docstring = """
 # this dictionary defines the allowed types and values for every parameter
 # we will use it for parameter validation during ErrorParams instantiation
 _val_dict = {
-    # param: [ is dict?, [allowed types], [allowed values], negative allowed? ]
-    "nYrObs": [False, [int, float], [], False],
-    "nVisYr": [True, [int, float], [], False],
-    "gamma": [True, [int, float], [], False],
-    "m5": [True, [int, float], [], True],
-    "tvis": [True, [int, float], [], False],
-    "airmass": [True, [int, float], [], False],
-    "Cm": [True, [int, float], [], True],
-    "dCmInf": [True, [int, float], [], True],
-    "msky": [True, [int, float], [], True],
-    "mskyDark": [True, [int, float], [], True],
-    "theta": [True, [int, float], [], False],
-    "km": [True, [int, float], [], False],
-    "tvisRef": [False, [int, float, type(None)], [], False],
-    "sigmaSys": [False, [int, float], [], False],
-    "sigLim": [False, [int, float], [], False],
-    "ndMode": [False, [str], ["flag", "sigLim"], None],
-    "ndFlag": [False, [int, float], [], True],
-    "absFlux": [False, [bool], [], None],
-    "extendedType": [False, [str], ["point", "auto", "gaap"], None],
-    "aMin": [False, [int, float], [], False],
-    "aMax": [False, [int, float], [], False],
-    "majorCol": [False, [str], [], None],
-    "minorCol": [False, [str], [], None],
-    "decorrelate": [False, [bool], [], None],
-    "highSNR": [False, [bool], [], None],
-    "scale": [True, [int, float], [], None],
-    "errLoc": [False, [str], ["after", "end", "alone"], None],
+    # param: ( is dict?, (allowed types), (allowed values), negative allowed? )
+    "nYrObs": (False, (int, float), (), False),
+    "nVisYr": (True, (int, float), (), False),
+    "gamma": (True, (int, float), (), False),
+    "m5": (True, (int, float), (), True),
+    "tvis": (True, (int, float), (), False),
+    "airmass": (True, (int, float), (), False),
+    "Cm": (True, (int, float), (), True),
+    "dCmInf": (True, (int, float), (), True),
+    "msky": (True, (int, float), (), True),
+    "mskyDark": (True, (int, float), (), True),
+    "theta": (True, (int, float), (), False),
+    "km": (True, (int, float), (), False),
+    "tvisRef": (False, (int, float, type(None)), (), False),
+    "sigmaSys": (False, (int, float), (), False),
+    "sigLim": (False, (int, float), (), False),
+    "ndMode": (False, (str,), ("flag", "sigLim"), None),
+    "ndFlag": (False, (int, float), (), True),
+    "absFlux": (False, (bool,), (), None),
+    "extendedType": (False, (str,), ("point", "auto", "gaap"), None),
+    "aMin": (False, (int, float), (), False),
+    "aMax": (False, (int, float), (), False),
+    "majorCol": (False, (str,), (), None),
+    "minorCol": (False, (str,), (), None),
+    "decorrelate": (False, (bool,), (), None),
+    "highSNR": (False, (bool,), (), None),
+    "scale": (True, (int, float), (), None),
+    "errLoc": (False, (str,), ("after", "end", "alone"), None),
 }
 
 
@@ -199,7 +198,7 @@ _val_dict = {
 class ErrorParams:
     """Parameters for the photometric error models."""
 
-    __doc__ += param_docstring
+    __doc__ += "\n" + param_docstring
 
     nYrObs: float
     nVisYr: dict[str, float]
@@ -437,7 +436,7 @@ class ErrorParams:
         """Check that this single parameter has the correct type/value."""
         name = key if subkey is None else f"{key}.{subkey}"
 
-        if not any([isinstance(param, t) for t in allowed_types]):
+        if not isinstance(param, allowed_types):
             raise TypeError(
                 f"{name} is of type {type(param).__name__}, but should be "
                 f"of type {', '.join(t.__name__ for t in allowed_types)}."
