@@ -187,6 +187,7 @@ NSR_\text{pt} \sqrt{\frac{A_\text{ap}}{A_\text{psf}}},
 $$
 
 where $A_\text{ap}$ is the area of the source aperture, and $A_\text{psf}$ is the area of the PSF.
+Note the PSF FWHM is assumed to scale like $\text{airmass}^{0.6}$.
 We set the proportionality constant to unity, so that when $A_\text{ap} \to A_\text{psf}$, we recover the error for a point source.
 
 We include two different models for calculating the aperture area. The "auto" method from [van den Busch (2020)](http://arxiv.org/abs/2007.01846) calculates the semi-major and -minor axes of the aperture ( $a_\text{ap}$ and $b_\text{ap}$) from the semi-major and -minor axes of the galaxy ( $a_\text{gal}$ and $b_\text{gal}$, corresponding to half-light radii):
