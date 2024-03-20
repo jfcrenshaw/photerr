@@ -444,14 +444,7 @@ class ErrorModel:
         pd.DataFrame
         """
         # set the rng
-        if isinstance(random_state, np.random.Generator):
-            rng = random_state
-        elif isinstance(random_state, int) or random_state is None:
-            rng = np.random.default_rng(random_state)
-        else:
-            raise TypeError(
-                "random_state must be a numpy random generator, an int, or None."
-            )
+        rng = np.random.default_rng(random_state)
 
         # get the bands we will calculate errors for
         bands = [band for band in catalog.columns if band in self._bands]
