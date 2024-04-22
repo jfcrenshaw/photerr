@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "photerr"
-version = "1.2.4"
+version = "1.3.0"
 description = "Photometric error model for astronomical imaging surveys"
 authors = ["John Franklin Crenshaw <jfcrenshaw@gmail.com>"]
 readme = "README.md"
