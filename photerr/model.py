@@ -123,7 +123,9 @@ class ErrorModel:
         # get the psf size for each band
         psf_size = np.array([self.params.theta[band] for band in bands])
         airmass = np.array([self.params.airmass[band] for band in bands])
-        psf_size *= airmass**0.6
+        for i in range(len(airmass)):
+            if airmass[i] > 0:
+                psf_size[i] *= airmass[i] ** 0.6
 
         # convert PSF FWHM to Gaussian sigma
         psf_sig = psf_size / 2.355
@@ -164,7 +166,9 @@ class ErrorModel:
         # get the psf size for each band
         psf_size = np.array([self.params.theta[band] for band in bands])
         airmass = np.array([self.params.airmass[band] for band in bands])
-        psf_size *= airmass**0.6
+        for i in range(len(airmass)):
+            if airmass[i] > 0:
+                psf_size[i] *= airmass[i] ** 0.6
 
         # convert PSF FWHM to Gaussian sigma
         psf_sig = psf_size / 2.355

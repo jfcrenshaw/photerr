@@ -17,6 +17,7 @@ class RomanErrorParams(ErrorParams):
 
     __doc__ += param_docstring
     __doc__ += "    Graham 2020 - https://arxiv.org/abs/2004.07885"
+    __doc__ += "\n    Rubin 2021 - https://arxiv.org/abs/2102.05069"
 
     nYrObs: float = 1.0
     nVisYr: dict[str, float] | float = 1.0
@@ -30,6 +31,15 @@ class RomanErrorParams(ErrorParams):
             "F": 26.25,
         }
     )
+    theta: dict[str, float] | float = field(
+        default_factory=lambda: {
+            "Y": 0.130,
+            "J": 0.136,
+            "H": 0.150,
+            "F": 0.166,
+        }
+    )
+    airmass: float = 0
 
 
 class RomanErrorModel(ErrorModel):

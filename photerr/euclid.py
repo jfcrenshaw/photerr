@@ -17,6 +17,7 @@ class EuclidErrorParams(ErrorParams):
 
     __doc__ += param_docstring
     __doc__ += "    Graham 2020 - https://arxiv.org/abs/2004.07885"
+    __doc__ += "\n    Scaramella 2021 - https://arxiv.org/abs/2108.01201"
 
     nYrObs: float = 1.0
     nVisYr: dict[str, float] | float = 1.0
@@ -29,6 +30,8 @@ class EuclidErrorParams(ErrorParams):
             "H": 23.9,
         }
     )
+    theta: dict[str, float] | float = 0.18
+    airmass: float = 0
 
 
 class EuclidErrorModel(ErrorModel):
