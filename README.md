@@ -13,6 +13,19 @@ It implements a generalization of the high-SNR point-source error model from [Iv
 
 PhotErr currently includes photometric error models for the Vera C. Rubin Observatory Legacy Survey of Space and Time (LSST), as well as the Euclid and Nancy Grace Roman space telescopes.
 
+If you use this package in your research, please cite the following paper
+
+```bibtex
+@misc{crenshaw2024,
+      title={Probabilistic Forward Modeling of Galaxy Catalogs with Normalizing Flows}, 
+      author={John Franklin Crenshaw and J. Bryce Kalmbach and Alexander Gagliano and Ziang Yan and Andrew J. Connolly and Alex I. Malz and Samuel J. Schmidt and The LSST Dark Energy Science Collaboration},
+      year={2024},
+      eprint={2405.04740},
+      archivePrefix={arXiv},
+      primaryClass={astro-ph.IM}
+}
+```
+
 # Getting started
 
 PhotErr is available on PyPI and can be installed with pip:
