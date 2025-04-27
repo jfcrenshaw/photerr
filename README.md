@@ -148,8 +148,16 @@ The band-independent systematic error floor, `sigmaSys` is still the same, and s
 
 ### *Other error models*
 
-In addition to `LsstErrorModel`, which comes with the LSST defaults, PhotErr includes `EuclidErrorModel` and `RomanErrorModel`, which come with the Euclid and Roman defaults, respectively.
-Each of these models also have corresponding parameter objects: `EuclidErrorParams` and `RomanErrorParams`.
+In addition to `LsstErrorModel`, which comes with the LSST defaults, PhotErr includes
+
+- `EuclidWideErrorModel` (also aliased as `EuclidErrorModel`)
+- `EuclidDeepErrorModel`
+- `RomanWideErrorModel`
+- `RomanMediumErrorModel` (also aliased as `RomanErrorModel`)
+- `RomanDeepErrorModel`
+- `RomanUltraDeepErrorModel`
+
+Each of these models also have corresponding parameter object, e.g. `RomanErrorParams`.
 
 You can also start with the base error model, `ErrorModel`, which is not defaulted for any specific survey.
 To instantiate `ErrorModel`, there are several required arguments that you must supply.
