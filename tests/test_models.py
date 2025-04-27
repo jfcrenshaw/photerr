@@ -22,7 +22,7 @@ def data() -> pd.DataFrame:
     """Return dummy data for error model tests.
 
     Includes a high SNR, a low SNR, and a super low SNR galaxy.
-    Includes an LSST band, a Euclid+Roman band, and a Roman band.
+    Includes an LSST band, a Euclid band, and a Euclid+Roman band.
     """
     array = np.array(
         [
@@ -31,7 +31,7 @@ def data() -> pd.DataFrame:
             [99, 99, 99, 2, 1],  # super low SNR
         ]
     )
-    dataframe = pd.DataFrame(array, columns=["g", "J", "F", "major", "minor"])
+    dataframe = pd.DataFrame(array, columns=["g", "VIS", "J", "major", "minor"])
     return dataframe
 
 
@@ -320,11 +320,11 @@ def test_errLoc(data: pd.DataFrame) -> None:
     """Test that errLoc works as expected."""
     # the error column should come right after the magnitude column
     after = LsstErrorModel(errLoc="after")(data, 0)
-    assert list(after.columns) == ["g", "g_err", "J", "F", "major", "minor"]
+    assert list(after.columns) == ["g", "g_err", "VIS", "J", "major", "minor"]
 
     # the error column should come at the end
     end = LsstErrorModel(errLoc="end")(data, 0)
-    assert list(end.columns) == ["g", "J", "F", "major", "minor", "g_err"]
+    assert list(end.columns) == ["g", "VIS", "J", "major", "minor", "g_err"]
 
     # the error column should be alone
     alone = LsstErrorModel(errLoc="alone")(data, 0)
@@ -348,10 +348,10 @@ def test_other_models(data: pd.DataFrame) -> None:
     assert lsstData.shape == (data.shape[0], data.shape[1] + 1)
 
     euclidData = EuclidErrorModel()(data, 0)
-    assert euclidData.shape == (data.shape[0], data.shape[1] + 1)
+    assert euclidData.shape == (data.shape[0], data.shape[1] + 2)
 
     romanData = RomanErrorModel()(data, 0)
-    assert romanData.shape == (data.shape[0], data.shape[1] + 2)
+    assert romanData.shape == (data.shape[0], data.shape[1] + 1)
 
 
 def test_rename_bands() -> None:
