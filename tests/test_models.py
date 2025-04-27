@@ -9,11 +9,15 @@ import pytest
 
 from photerr import (
     ErrorModel,
-    EuclidErrorModel,
+    EuclidWideErrorModel,
+    EuclidDeepErrorModel,
     LsstErrorModel,
     LsstErrorModelV1,
     LsstErrorParams,
-    RomanErrorModel,
+    RomanWideErrorModel,
+    RomanMediumErrorModel,
+    RomanDeepErrorModel,
+    RomanUltraDeepErrorModel,
 )
 
 
@@ -22,16 +26,16 @@ def data() -> pd.DataFrame:
     """Return dummy data for error model tests.
 
     Includes a high SNR, a low SNR, and a super low SNR galaxy.
-    Includes an LSST band, a Euclid band, and a Euclid+Roman band.
+    Includes an LSST band, a Euclid band, and a Euclid+Roman band, Roman deep band.
     """
     array = np.array(
         [
-            [21, 21, 21, 0.02, 0.01],  # high SNR
-            [28, 28, 28, 0.2, 0.1],  # low SNR
-            [99, 99, 99, 2, 1],  # super low SNR
+            [21, 21, 21, 21, 0.02, 0.01],  # high SNR
+            [28, 28, 28, 28, 0.2, 0.1],  # low SNR
+            [99, 99, 99, 99, 2, 1],  # super low SNR
         ]
     )
-    dataframe = pd.DataFrame(array, columns=["g", "VIS", "J", "major", "minor"])
+    dataframe = pd.DataFrame(array, columns=["g", "VIS", "J", "W", "major", "minor"])
     return dataframe
 
 
@@ -320,11 +324,11 @@ def test_errLoc(data: pd.DataFrame) -> None:
     """Test that errLoc works as expected."""
     # the error column should come right after the magnitude column
     after = LsstErrorModel(errLoc="after")(data, 0)
-    assert list(after.columns) == ["g", "g_err", "VIS", "J", "major", "minor"]
+    assert list(after.columns) == ["g", "g_err", "VIS", "J", "W", "major", "minor"]
 
     # the error column should come at the end
     end = LsstErrorModel(errLoc="end")(data, 0)
-    assert list(end.columns) == ["g", "VIS", "J", "major", "minor", "g_err"]
+    assert list(end.columns) == ["g", "VIS", "J", "W", "major", "minor", "g_err"]
 
     # the error column should be alone
     alone = LsstErrorModel(errLoc="alone")(data, 0)
@@ -347,10 +351,22 @@ def test_other_models(data: pd.DataFrame) -> None:
     lsstData = LsstErrorModelV1()(data, 0)
     assert lsstData.shape == (data.shape[0], data.shape[1] + 1)
 
-    euclidData = EuclidErrorModel()(data, 0)
+    euclidData = EuclidWideErrorModel()(data, 0)
     assert euclidData.shape == (data.shape[0], data.shape[1] + 2)
 
-    romanData = RomanErrorModel()(data, 0)
+    euclidData = EuclidDeepErrorModel()(data, 0)
+    assert euclidData.shape == (data.shape[0], data.shape[1] + 2)
+
+    romanData = RomanWideErrorModel()(data, 0)
+    assert romanData.shape == (data.shape[0], data.shape[1] + 0)
+
+    romanData = RomanMediumErrorModel()(data, 0)
+    assert romanData.shape == (data.shape[0], data.shape[1] + 1)
+
+    romanData = RomanDeepErrorModel()(data, 0)
+    assert romanData.shape == (data.shape[0], data.shape[1] + 2)
+
+    romanData = RomanUltraDeepErrorModel()(data, 0)
     assert romanData.shape == (data.shape[0], data.shape[1] + 1)
 
 
@@ -360,8 +376,8 @@ def test_rename_bands() -> None:
     This failure was noticed by Sam Schmidt.
     """
     LsstErrorModel(renameDict={"y": "y_lsst"})
-    EuclidErrorModel(renameDict={"Y": "y_euclid"})
-    RomanErrorModel(renameDict={"Y": "y_roman"})
+    EuclidWideErrorModel(renameDict={"Y": "y_euclid"})
+    RomanMediumErrorModel(renameDict={"Y": "y_roman"})
 
 
 def test_alternate_instantiation() -> None:
