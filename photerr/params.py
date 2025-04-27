@@ -201,8 +201,8 @@ class ErrorParams:
     __doc__ += "\n" + param_docstring
 
     nYrObs: float
-    nVisYr: dict[str, float]
-    gamma: dict[str, float]
+    nVisYr: dict[str, float] | float
+    gamma: dict[str, float] | float
 
     m5: dict[str, float] | float = field(default_factory=lambda: {})
 
@@ -349,7 +349,7 @@ class ErrorParams:
             for band in self.nVisYr
         }
 
-    def rename_bands(self, renameDict: dict[str, str]) -> None:
+    def rename_bands(self, renameDict: dict[str, str] | None) -> None:
         """Rename the bands used in the error model.
 
         This method might be useful if you want to use the default parameters for an
