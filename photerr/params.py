@@ -77,9 +77,9 @@ param_docstring = """
         Whether to use the error model for point sources or extended sources.
         For point sources, use "point". For extended sources, you can use "auto"
         or "gaap". See Notes below for more details on these models.
-    aMin : float; default=2.0
+    aMin : float; default=0.7
         The minimum GAaP aperture diameter in arcseconds.
-    aMax : float; default=0.7
+    aMax : float; default=2.0
         The maximum GAaP aperture diameter in arcseconds.
     majorCol : str; default="major"
         The name of the column containing the semi-major axes of the galaxies (in
