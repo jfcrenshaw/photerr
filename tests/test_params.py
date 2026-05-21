@@ -36,7 +36,7 @@ def test_no_bands_left() -> None:
         LsstErrorParams(nVisYr={"K": 10})
 
 
-def test_rename_bands() -> None:
+def test_renameBands() -> None:
     """Test that band renaming works properly."""
     renameDict = {band: f"lsst_{band}" for band in "ugrizy"}
 

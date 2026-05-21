@@ -286,7 +286,7 @@ class ErrorParams:
         self._convert_to_dict()
 
         # rename the bands
-        self.rename_bands(renameDict)
+        self.renameBands(renameDict)
 
         # validate the parameters
         if validate:
@@ -406,7 +406,7 @@ class ErrorParams:
             for band in self.nVisYr
         }
 
-    def rename_bands(self, renameDict: dict[str, str] | None) -> None:
+    def renameBands(self, renameDict: dict[str, str] | None) -> None:
         """Rename the bands used in the error model.
 
         This method might be useful if you want to use the default parameters for an

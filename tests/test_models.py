@@ -365,7 +365,7 @@ def test_other_models(data: pd.DataFrame) -> None:
     assert romanData.shape == (data.shape[0], data.shape[1] + 1)
 
 
-def test_rename_bands() -> None:
+def test_renameBands() -> None:
     """Test renaming the bands in the error model.
 
     This failure was noticed by Sam Schmidt.
