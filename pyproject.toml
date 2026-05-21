@@ -1,6 +1,6 @@
 [project]
 name = "photerr"
-version = "1.4.1"
+version = "1.5.1"
 description = "Photometric error model for astronomical imaging surveys"
 authors = [{name = "John Franklin Crenshaw", email = "jfcrenshaw@gmail.com"}]
 readme = "README.md"

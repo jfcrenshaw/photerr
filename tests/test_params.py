@@ -17,11 +17,8 @@ def test_clean_dictionaries() -> None:
     for key, param in LsstErrorParams(nVisYr={"g": 8}).__dict__.items():
         # for each dictionary parameter
         if isinstance(param, dict):
-            # m5 should be empty
-            if key == "m5":
-                assert len(param) == 0
-            # asinh_b has no defaults in params; it stays empty until model init
-            elif key == "asinh_b":
+            # m5 and asinh_b should be empty
+            if key == "m5" or key == "asinh_b":
                 assert len(param) == 0
             # the other parameters should only contain g
             else:

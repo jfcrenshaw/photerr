@@ -325,7 +325,7 @@ class ErrorParams:
 
             # if it should be a dictionary but it's not
             if is_dict and not isinstance(param, dict):
-                self.__dict__[key] = {band: param for band in bands}
+                self.__dict__[key] = dict.fromkeys(bands, param)
 
     def _clean_dictionaries(self) -> None:
         """Remove unnecessary info from all of the dictionaries.

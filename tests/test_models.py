@@ -9,19 +9,19 @@ import pytest
 
 from photerr import (
     ErrorModel,
-    EuclidWideErrorModel,
     EuclidDeepErrorModel,
+    EuclidWideErrorModel,
     LsstErrorModel,
     LsstErrorModelV1,
     LsstErrorParams,
-    RomanWideErrorModel,
-    RomanMediumErrorModel,
     RomanDeepErrorModel,
+    RomanMediumErrorModel,
     RomanUltraDeepErrorModel,
+    RomanWideErrorModel,
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def data() -> pd.DataFrame:
     """Return dummy data for error model tests.
 
@@ -39,7 +39,7 @@ def data() -> pd.DataFrame:
     return dataframe
 
 
-@pytest.fixture()
+@pytest.fixture
 def lsst_data() -> pd.DataFrame:
     """Return 1000 random LSST galaxies for error model tests."""
     rng = np.random.default_rng(0)
@@ -310,11 +310,11 @@ def test_limitMags_aperture(extendedType: str) -> None:
 def test_limitingMags_scale() -> None:
     """Test that increasing the error scale decreases the limiting mags."""
     magLimScale1 = LsstErrorModel(
-        scale={band: 1 for band in "ugrizy"}
+        scale=dict.fromkeys("ugrizy", 1)
     ).getLimitingMags()
 
     magLimScale2 = LsstErrorModel(
-        scale={band: 2 for band in "ugrizy"}
+        scale=dict.fromkeys("ugrizy", 2)
     ).getLimitingMags()
 
     assert all(magLimScale1[band] > magLimScale2[band] for band in magLimScale1)
@@ -347,7 +347,6 @@ def test_bad_instantiation() -> None:
 
 def test_other_models(data: pd.DataFrame) -> None:
     """Test instantiating other models and calculating errors."""
-
     lsstData = LsstErrorModelV1()(data, 0)
     assert lsstData.shape == (data.shape[0], data.shape[1] + 1)
 

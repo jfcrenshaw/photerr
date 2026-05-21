@@ -60,7 +60,7 @@ class ErrorModel:
 
     @property
     def params(self) -> ErrorParams:
-        """The error model parameters in an ErrorParams objet."""  # noqa: D401
+        """The error model parameters in an ErrorParams objet."""
         return self._params
 
     def _calculate_m5(self) -> None:
