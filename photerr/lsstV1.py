@@ -1,10 +1,11 @@
 """Photometric error model for LSST using defaults from Ivezic 2019."""
 
 from dataclasses import dataclass, field
-from typing import Any
 
-from photerr.model import ErrorModel
+from photerr.model import ErrorModel, _make_survey_model
 from photerr.params import ErrorParams, param_docstring
+
+__all__ = ["LsstErrorModelV1", "LsstErrorParamsV1"]
 
 
 @dataclass
@@ -41,7 +42,7 @@ class LsstErrorParamsV1(ErrorParams):
     m5: dict[str, float] | float = field(default_factory=lambda: {})
 
     tvis: dict[str, float] | float = 30
-    airmass: dict[str, float] | float = 1.2
+    airmass: dict[str, float | None] | float | None = 1.2
     Cm: dict[str, float] | float = field(
         default_factory=lambda: {
             "u": 23.09,
@@ -72,6 +73,8 @@ class LsstErrorParamsV1(ErrorParams):
             "y": 18.61,
         }
     )
+    # mskyDark equals msky in this dataset: Ivezic 2019 uses a single sky brightness
+    # value, so the reference and actual sky brightness are the same.
     mskyDark: dict[str, float] | float = field(
         default_factory=lambda: {
             "u": 22.99,
@@ -106,17 +109,4 @@ class LsstErrorParamsV1(ErrorParams):
     tvisRef: float | None = 30
 
 
-class LsstErrorModelV1(ErrorModel):
-    """Photometric error model for LSST, version 1.
-
-    Below is the parameter docstring:
-    """
-
-    __doc__ += LsstErrorParamsV1.__doc__
-
-    def __init__(self, **kwargs: Any) -> None:
-        """Create an LSST error model.
-
-        Keyword arguments override default values in LsstErrorParams.
-        """
-        super().__init__(LsstErrorParamsV1(**kwargs))
+LsstErrorModelV1: type[ErrorModel] = _make_survey_model(LsstErrorParamsV1)

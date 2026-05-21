@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import InitVar, dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -196,7 +196,7 @@ _val_dict = {
     "gamma": (True, (int, float), (), False),
     "m5": (True, (int, float), (), True),
     "tvis": (True, (int, float), (), False),
-    "airmass": (True, (int, float), (), False),
+    "airmass": (True, (int, float, type(None)), (), False),
     "Cm": (True, (int, float), (), True),
     "dCmInf": (True, (int, float), (), True),
     "msky": (True, (int, float), (), True),
@@ -237,7 +237,7 @@ class ErrorParams:
     m5: dict[str, float] | float = field(default_factory=lambda: {})
 
     tvis: dict[str, float] | float = field(default_factory=lambda: {})
-    airmass: dict[str, float] | float = field(default_factory=lambda: {})
+    airmass: dict[str, float | None] | float | None = field(default_factory=lambda: {})
     Cm: dict[str, float] | float = field(default_factory=lambda: {})
     dCmInf: dict[str, float] | float = field(default_factory=lambda: {})
     msky: dict[str, float] | float = field(default_factory=lambda: {})
@@ -249,31 +249,41 @@ class ErrorParams:
     sigmaSys: float = 0.005
 
     sigLim: float = 0
-    ndMode: str = "flag"
+    ndMode: Literal["flag", "sigLim"] = "flag"
     ndFlag: float = np.inf
     absFlux: bool = False
 
-    extendedType: str = "point"
+    extendedType: Literal["point", "auto", "gaap"] = "point"
     aMin: float = 0.7
     aMax: float = 2.0
     majorCol: str = "major"
     minorCol: str = "minor"
 
-    input_type: str = "pogson"
-    output_type: str = "pogson"
+    # Note: input_type/output_type/asinh_b use snake_case (added later than the
+    # camelCase parameters above) for consistency with Python convention.
+    input_type: Literal["pogson", "maggy", "asinh"] = "pogson"
+    output_type: Literal["pogson", "maggy", "asinh"] = "pogson"
     asinh_b: dict[str, float] | float = field(default_factory=lambda: {})
 
     decorrelate: bool = True
     highSNR: bool = False
     scale: dict[str, float] | float = field(default_factory=lambda: {})
 
-    errLoc: str = "after"
+    errLoc: Literal["after", "end", "alone"] = "after"
 
     renameDict: InitVar[dict[str, str] | None] = None
     validate: InitVar[bool] = True
 
     def __post_init__(self, renameDict: dict[str, str] | None, validate: bool) -> None:
-        """Rename bands and remove duplicate parameters."""
+        """Convert scalars to dicts, rename bands, validate, and clean parameters.
+
+        Raises
+        ------
+        ValueError
+            If nYrObs is zero.
+            If extended error types are used but theta or airmass are incomplete.
+            If aMin >= aMax.
+        """
         # make sure all dictionaries are dictionaries
         self._convert_to_dict()
 
@@ -287,12 +297,16 @@ class ErrorParams:
         # clean up the dictionaries
         self._clean_dictionaries()
 
+        # nYrObs=0 passes the non-negative check but causes division by zero downstream
+        if self.nYrObs == 0:
+            raise ValueError("nYrObs must be positive (got 0).")
+
         # if using extended error types,
         if self.extendedType == "auto" or self.extendedType == "gaap":
-            # make sure theta is provided for every band
+            # make sure theta and airmass are provided for every band
             if set(self.theta.keys()) != set(self.nVisYr.keys()) or set(
                 self.airmass.keys()
-            ) != set(self.airmass.keys()):
+            ) != set(self.nVisYr.keys()):
                 raise ValueError(
                     "If using one of the extended error types "
                     "(i.e. extendedType == 'auto' or 'gaap'), "
@@ -304,7 +318,13 @@ class ErrorParams:
                 raise ValueError("aMin must be less than aMax.")
 
     def _convert_to_dict(self) -> None:
-        """For dict parameters that aren't dicts, convert to dicts."""
+        """For dict parameters that aren't dicts, convert to dicts.
+
+        Raises
+        ------
+        ValueError
+            If no dictionary parameter is provided, so band names cannot be inferred.
+        """
         # first loop over all the parameters and get a list of every band
         bands = []
         for param in self.__dict__.values():
@@ -338,6 +358,11 @@ class ErrorParams:
 
         Finally, we will set scale=1 for all bands for which the scale isn't
         explicitly set.
+
+        Raises
+        ------
+        ValueError
+            If no bands remain after removing under-specified entries.
         """
         # keep a running set of all the bands we will calculate errors for
         all_bands = set(self.nVisYr.keys()).intersection(self.gamma.keys())
@@ -391,9 +416,14 @@ class ErrorParams:
 
         Parameters
         ----------
-        renameDict: dict
+        renameDict : dict[str, str] or None
             A dictionary containing key: value pairs {old_name: new_name}.
-            For example map={"u": "lsst_u"} will rename the u band to lsst_u.
+            For example ``{"u": "lsst_u"}`` will rename the u band to lsst_u.
+
+        Raises
+        ------
+        TypeError
+            If renameDict is not a dict or None.
         """
         if renameDict is None:
             return
@@ -411,7 +441,27 @@ class ErrorParams:
                 }
 
     def update(self, *args: dict, **kwargs: Any) -> None:
-        """Update parameters using either a dictionary or keyword arguments."""
+        """Update parameters using a dictionary or keyword arguments.
+
+        If a single positional dict is given, it is treated as keyword arguments.
+        All changes are atomic: if validation fails the params are fully rolled back.
+
+        Parameters
+        ----------
+        *args : dict, optional
+            A single optional positional argument that must be a dict of
+            parameter names to new values.
+        **kwargs
+            Parameter names and values to update.
+
+        Raises
+        ------
+        ValueError
+            If more than one positional argument is passed, or if an unknown
+            parameter name is given, or if the new values fail validation.
+        TypeError
+            If the positional argument is not a dict.
+        """
         # if non-keyword arguments passed, make sure it is just a single dictionary
         # and pass it back through as keyword arguments.
         if len(args) > 1:
@@ -449,6 +499,8 @@ class ErrorParams:
             self.__post_init__(renameDict=renameDict, validate=validate)
 
         except Exception as error:
+            # broad catch intentional: roll back even on unexpected errors so the
+            # object is never left in a partially-modified state
             self.__dict__ = safe_copy.__dict__
             raise error
 
@@ -459,11 +511,11 @@ class ErrorParams:
     @staticmethod
     def _check_single_param(
         key: str,
-        subkey: str,
+        subkey: str | None,
         param: Any,
-        allowed_types: list,
-        allowed_values: list,
-        negative_allowed: bool,
+        allowed_types: tuple[type, ...],
+        allowed_values: tuple[str, ...],
+        negative_allowed: bool | None,
     ) -> None:
         """Check that this single parameter has the correct type/value."""
         name = key if subkey is None else f"{key}.{subkey}"

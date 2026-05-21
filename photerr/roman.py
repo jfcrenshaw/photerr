@@ -1,33 +1,48 @@
 """Photometric error model for Roman."""
 
 from dataclasses import dataclass, field
-from typing import Any
 
-from photerr.model import ErrorModel
+from photerr.model import ErrorModel, _make_survey_model
 from photerr.params import ErrorParams, param_docstring
+
+__all__ = [
+    "RomanDeepErrorModel",
+    "RomanDeepErrorParams",
+    "RomanMediumErrorModel",
+    "RomanMediumErrorParams",
+    "RomanUltraDeepErrorModel",
+    "RomanUltraDeepErrorParams",
+    "RomanWideErrorModel",
+    "RomanWideErrorParams",
+]
+
+# Module-level reference strings shared by all Roman params classes
+_REF_GRAHAM = "    Graham 2020 - https://arxiv.org/abs/2004.07885"
+_REF_ROTAC = (
+    "\n    ROTAC Report - https://roman.gsfc.nasa.gov/"
+    "science/ccs/ROTAC-Report-20250424-v1.pdf"
+)
+_REF_WFI = "\n    WFI Report - https://roman.gsfc.nasa.gov/science/WFI_technical.html"
+_ROMAN_REFS = _REF_GRAHAM + _REF_ROTAC + _REF_WFI
 
 
 @dataclass
 class RomanWideErrorParams(ErrorParams):
     """Parameters for the Roman wide-field photometric error model.
 
-    gamma and limiting magnitudes taken from page 4 of Graham 2020.
+    gamma taken from page 4 of Graham 2020.
     nYrObs and nVisYr set = 1, assuming that Roman is point-and-stare.
 
-    Depth taken from appendix C.1 of the ROTAC report
+    Depth taken from appendix C.1 of the ROTAC report.
 
     PSF FWHMs taken from v1 of the WFI performance document.
+
+    airmass=None for all bands: Roman is space-based, so no atmospheric
+    PSF scaling is applied.
     """
 
     __doc__ += param_docstring
-    __doc__ += "    Graham 2020 - https://arxiv.org/abs/2004.07885"
-    __doc__ += (
-        "\n    ROTAC Report - https://roman.gsfc.nasa.gov/"
-        "science/ccs/ROTAC-Report-20250424-v1.pdf"
-    )
-    __doc__ += (
-        "\n    WFI Report - https://roman.gsfc.nasa.gov/science/WFI_technical.html"
-    )
+    __doc__ += _ROMAN_REFS
 
     nYrObs: float = 1.0
     nVisYr: dict[str, float] | float = 1.0
@@ -43,46 +58,27 @@ class RomanWideErrorParams(ErrorParams):
             "H": 0.128,
         }
     )
-    airmass: dict[str, float] | float = 0
-
-
-class RomanWideErrorModel(ErrorModel):
-    """Photometric error model for Roman wide field.
-
-    Below is the parameter docstring:
-    """
-
-    __doc__ += RomanWideErrorParams.__doc__
-
-    def __init__(self, **kwargs: Any) -> None:
-        """Create a Roman wide-field error model.
-
-        Keyword arguments override default values in RomanWideErrorParams.
-        """
-        super().__init__(RomanWideErrorParams(**kwargs))
+    # None signals space-based telescope: no airmass PSF scaling
+    airmass: dict[str, float | None] | float | None = None
 
 
 @dataclass
 class RomanMediumErrorParams(RomanWideErrorParams):
     """Parameters for the Roman medium-field photometric error model.
 
-    gamma and limiting magnitudes taken from page 4 of Graham 2020.
+    gamma taken from page 4 of Graham 2020.
     nYrObs and nVisYr set = 1, assuming that Roman is point-and-stare.
 
-    Depth taken from appendix C.1 of the ROTAC report
+    Depth taken from appendix C.1 of the ROTAC report.
 
     PSF FWHMs taken from v1 of the WFI performance document.
+
+    airmass=None for all bands: Roman is space-based, so no atmospheric
+    PSF scaling is applied.
     """
 
     __doc__ += param_docstring
-    __doc__ += "    Graham 2020 - https://arxiv.org/abs/2004.07885"
-    __doc__ += (
-        "\n    ROTAC Report - https://roman.gsfc.nasa.gov/"
-        "science/ccs/ROTAC-Report-20250424-v1.pdf"
-    )
-    __doc__ += (
-        "\n    WFI Report - https://roman.gsfc.nasa.gov/science/WFI_technical.html"
-    )
+    __doc__ += _ROMAN_REFS
 
     m5: dict[str, float] | float = field(
         default_factory=lambda: {
@@ -98,46 +94,26 @@ class RomanMediumErrorParams(RomanWideErrorParams):
             "H": 0.128,
         }
     )
-    airmass: dict[str, float] | float = 0
-
-
-class RomanMediumErrorModel(ErrorModel):
-    """Photometric error model for Roman medium field.
-
-    Below is the parameter docstring:
-    """
-
-    __doc__ += RomanMediumErrorParams.__doc__
-
-    def __init__(self, **kwargs: Any) -> None:
-        """Create a Roman medium-field error model.
-
-        Keyword arguments override default values in RomanMediumErrorParams.
-        """
-        super().__init__(RomanMediumErrorParams(**kwargs))
+    airmass: dict[str, float | None] | float | None = None
 
 
 @dataclass
 class RomanDeepErrorParams(RomanWideErrorParams):
     """Parameters for the Roman deep-field photometric error model.
 
-    gamma and limiting magnitudes taken from page 4 of Graham 2020.
+    gamma taken from page 4 of Graham 2020.
     nYrObs and nVisYr set = 1, assuming that Roman is point-and-stare.
 
-    Depth taken from appendix C.1 of the ROTAC report
+    Depth taken from appendix C.1 of the ROTAC report.
 
     PSF FWHMs taken from v1 of the WFI performance document.
+
+    airmass=None for all bands: Roman is space-based, so no atmospheric
+    PSF scaling is applied.
     """
 
     __doc__ += param_docstring
-    __doc__ += "    Graham 2020 - https://arxiv.org/abs/2004.07885"
-    __doc__ += (
-        "\n    ROTAC Report - https://roman.gsfc.nasa.gov/"
-        "science/ccs/ROTAC-Report-20250424-v1.pdf"
-    )
-    __doc__ += (
-        "\n    WFI Report - https://roman.gsfc.nasa.gov/science/WFI_technical.html"
-    )
+    __doc__ += _ROMAN_REFS
 
     m5: dict[str, float] | float = field(
         default_factory=lambda: {
@@ -161,46 +137,26 @@ class RomanDeepErrorParams(RomanWideErrorParams):
             "W": 0.105,
         }
     )
-    airmass: dict[str, float] | float = 0
-
-
-class RomanDeepErrorModel(ErrorModel):
-    """Photometric error model for Roman deep field.
-
-    Below is the parameter docstring:
-    """
-
-    __doc__ += RomanDeepErrorParams.__doc__
-
-    def __init__(self, **kwargs: Any) -> None:
-        """Create a Roman deep-field error model.
-
-        Keyword arguments override default values in RomanDeepErrorParams.
-        """
-        super().__init__(RomanDeepErrorParams(**kwargs))
+    airmass: dict[str, float | None] | float | None = None
 
 
 @dataclass
 class RomanUltraDeepErrorParams(RomanWideErrorParams):
     """Parameters for the Roman ultra-deep-field photometric error model.
 
-    gamma and limiting magnitudes taken from page 4 of Graham 2020.
+    gamma taken from page 4 of Graham 2020.
     nYrObs and nVisYr set = 1, assuming that Roman is point-and-stare.
 
-    Depth taken from appendix C.1 of the ROTAC report
+    Depth taken from appendix C.1 of the ROTAC report.
 
     PSF FWHMs taken from v1 of the WFI performance document.
+
+    airmass=None for all bands: Roman is space-based, so no atmospheric
+    PSF scaling is applied.
     """
 
     __doc__ += param_docstring
-    __doc__ += "    Graham 2020 - https://arxiv.org/abs/2004.07885"
-    __doc__ += (
-        "\n    ROTAC Report - https://roman.gsfc.nasa.gov/"
-        "science/ccs/ROTAC-Report-20250424-v1.pdf"
-    )
-    __doc__ += (
-        "\n    WFI Report - https://roman.gsfc.nasa.gov/science/WFI_technical.html"
-    )
+    __doc__ += _ROMAN_REFS
 
     m5: dict[str, float] | float = field(
         default_factory=lambda: {
@@ -216,20 +172,12 @@ class RomanUltraDeepErrorParams(RomanWideErrorParams):
             "H": 0.128,
         }
     )
-    airmass: dict[str, float] | float = 0
+    airmass: dict[str, float | None] | float | None = None
 
 
-class RomanUltraDeepErrorModel(ErrorModel):
-    """Photometric error model for Roman ultra-deep field.
-
-    Below is the parameter docstring:
-    """
-
-    __doc__ += RomanUltraDeepErrorParams.__doc__
-
-    def __init__(self, **kwargs: Any) -> None:
-        """Create a Roman ultra-deep-field error model.
-
-        Keyword arguments override default values in RomanUltraDeepErrorParams.
-        """
-        super().__init__(RomanUltraDeepErrorParams(**kwargs))
+RomanWideErrorModel: type[ErrorModel] = _make_survey_model(RomanWideErrorParams)
+RomanMediumErrorModel: type[ErrorModel] = _make_survey_model(RomanMediumErrorParams)
+RomanDeepErrorModel: type[ErrorModel] = _make_survey_model(RomanDeepErrorParams)
+RomanUltraDeepErrorModel: type[ErrorModel] = _make_survey_model(
+    RomanUltraDeepErrorParams
+)

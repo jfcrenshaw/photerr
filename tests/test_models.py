@@ -333,9 +333,9 @@ def test_errLoc(data: pd.DataFrame) -> None:
 
 def test_bad_instantiation() -> None:
     """Test some bad inputs to instantiation."""
-    with pytest.raises(ValueError, match="only non-keyword argument"):
+    with pytest.raises(ValueError, match="at most one positional"):
         ErrorModel({}, {})  # type: ignore
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="must be an ErrorParams"):
         ErrorModel({})  # type: ignore
     with pytest.raises(ValueError, match="Please provide either"):
         ErrorModel()
@@ -477,10 +477,10 @@ def test_scale(highSNR: bool) -> None:
     assert np.allclose(ratio[0, :], 1)
 
     # and the grizy bands of the low SNR
-    np.allclose(ratio[1, 1:], 1)
+    assert np.allclose(ratio[1, 1:], 1)
 
     # but u band of low SNR is doubled
-    np.allclose(ratio[1, 0], 2)
+    assert np.allclose(ratio[1, 0], 2)
 
 
 def test_output_type_pogson_default(lsst_data: pd.DataFrame) -> None:
@@ -685,6 +685,24 @@ def test_ndFlag_with_output_types(data: pd.DataFrame) -> None:
         # the super-low-SNR galaxy (mag=99) should be flagged in all output types
         assert out["g"].iloc[-1] == np.inf
         assert out["g_err"].iloc[-1] == np.inf
+
+
+def test_limitingMags_bad_nSigma() -> None:
+    """Test that nSigma <= 0 raises a ValueError."""
+    errModel = LsstErrorModel()
+    with pytest.raises(ValueError, match="nSigma must be positive"):
+        errModel.getLimitingMags(nSigma=0)
+    with pytest.raises(ValueError, match="nSigma must be positive"):
+        errModel.getLimitingMags(nSigma=-1)
+
+
+def test_extended_missing_columns(data: pd.DataFrame) -> None:
+    """Test that missing majorCol/minorCol raises a clear ValueError."""
+    bad_catalog = data[["g", "VIS"]]  # no major/minor columns
+    with pytest.raises(ValueError, match="not found in catalog"):
+        LsstErrorModel(extendedType="auto")(bad_catalog, 0)
+    with pytest.raises(ValueError, match="not found in catalog"):
+        LsstErrorModel(extendedType="gaap")(bad_catalog, 0)
 
 
 def test_limiting_mags() -> None:

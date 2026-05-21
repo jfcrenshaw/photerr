@@ -7,14 +7,48 @@ import pandas as pd
 
 from photerr.params import ErrorParams
 
+# Conversion from FWHM to Gaussian sigma: 2*sqrt(2*ln(2))
+_FWHM_TO_SIGMA: float = 2.0 * np.sqrt(2.0 * np.log(2.0))
 
-class ErrorModel:
-    """Base error model from Ivezic 2019.
+# Conversion from half-IQR to Gaussian sigma: probit(0.75)
+_HALF_IQR_TO_SIGMA: float = 0.6745
 
-    Below is the parameter docstring:
+# Factor in the luptitude (asinh magnitude) formula: a = 2.5/ln(10)
+_ASINH_A: float = 2.5 / np.log(10)
+
+
+def _make_survey_model(params_class: type[ErrorParams]) -> type["ErrorModel"]:
+    """Create an ErrorModel subclass that wraps params_class.
+
+    Parameters
+    ----------
+    params_class : type[ErrorParams]
+        The ErrorParams subclass whose defaults the model will use.
+
+    Returns
+    -------
+    type[ErrorModel]
+        A new ErrorModel subclass named after params_class (with
+        "Params" replaced by "Model").
     """
 
-    __doc__ += ErrorParams.__doc__
+    def __init__(self: "ErrorModel", **kwargs: Any) -> None:
+        ErrorModel.__init__(self, params_class(**kwargs))
+
+    __init__.__doc__ = (
+        f"Create the error model. "
+        f"Keyword arguments override defaults in {params_class.__name__}."
+    )
+    name = params_class.__name__.replace("Params", "Model")
+    return type(
+        name, (ErrorModel,), {"__init__": __init__, "__doc__": params_class.__doc__}
+    )
+
+
+class ErrorModel:
+    """Base error model from Ivezic 2019."""
+
+    __doc__ = (__doc__ or "") + "\n\n" + (ErrorParams.__doc__ or "")
 
     def __init__(self, *args: ErrorParams, **kwargs: Any) -> None:
         """Create an error model using the passed ErrorParams or keyword overrides.
@@ -26,14 +60,16 @@ class ErrorModel:
         values override the values in the passed ErrorParams object instead.
         """
         # check that non-keyword argument is just an ErrorParams object
-        args_error_msg = (
-            "The only non-keyword argument that can be passed "
-            "is a single ErrorParams object."
-        )
         if len(args) > 1:
-            raise ValueError(args_error_msg)
+            raise ValueError(
+                f"Expected at most one positional argument (an ErrorParams object), "
+                f"got {len(args)}."
+            )
         elif len(args) == 1 and not isinstance(args[0], ErrorParams):
-            raise TypeError(args_error_msg)
+            raise TypeError(
+                f"The positional argument must be an ErrorParams object, "
+                f"got {type(args[0]).__name__}."
+            )
 
         # assemble and save the final ErrorParams
         if len(args) == 0 and len(kwargs) == 0:
@@ -60,32 +96,34 @@ class ErrorModel:
 
     @property
     def params(self) -> ErrorParams:
-        """The error model parameters in an ErrorParams objet."""
+        """The error model parameters in an ErrorParams object."""
         return self._params
 
     def _calculate_m5(self) -> None:
         """Calculate the single-visit 5-sigma limiting magnitudes.
 
         Uses Eq. 6 from Ivezic 2019 and Eq. 2-3 of Bianco 2022.
-        However, if m5 has been explicitly passed for any bands,
-        those values are used instead.
+        For bands with an explicit m5, that value is used directly.
+        Results are stored in ``self._all_m5``.
         """
         # calculate m5 for the bands with the requisite info
         m5 = {}
         for band in self.params.Cm:
-            # calculate the scaled visit time using Eq. 3 of Bianco 2022
+            # Eq. 3 of Bianco 2022: scale visit time by sky brightness relative
+            # to the dark-sky reference
             tau = (
                 self.params.tvis[band]
                 / self.params.tvisRef
                 * 10 ** ((self.params.msky[band] - self.params.mskyDark[band]) / -2.5)
             )
 
-            # calculate Cm exposure time adjustment using Eq. 2 from Bianco 2022
+            # Eq. 2 from Bianco 2022: readout-noise correction to Cm
             dCmTau = self.params.dCmInf[band] - 1.25 * np.log10(
                 1 + (10 ** (0.8 * self.params.dCmInf[band]) - 1) / tau
             )
 
-            # calculate m5 using Eq. 6 from Ivezic 2019 and Eq. 2 from Bianco 2022
+            # Eq. 6 from Ivezic 2019 (coefficients: 0.50 sky term, 0.7 arcsec
+            # reference seeing, 30 s reference exposure, 2.5 Pogson factor)
             m5[band] = (
                 self.params.Cm[band]
                 + 0.50 * (self.params.msky[band] - 21)
@@ -106,6 +144,7 @@ class ErrorModel:
 
         Default b for each band is the coadded 1-sigma limiting flux:
         b = 10^(-m5_coadd / 2.5) / 5.
+        Results are stored in ``self._b``.
         """
         self._b: dict[str, float] = {}
         if self.params.input_type != "asinh" and self.params.output_type != "asinh":
@@ -117,7 +156,30 @@ class ErrorModel:
             else:
                 self._b[band] = 10 ** (-m5_coadd[band] / 2.5) / 5
 
-    def _to_pogson(self, data: np.ndarray, bands: list) -> np.ndarray:
+    def _get_psf_sig(self, bands: list[str]) -> np.ndarray:
+        """Return the per-band PSF Gaussian sigma in arcseconds.
+
+        For space-based bands (airmass is None) the FWHM is used as-is;
+        for ground-based bands the FWHM is first scaled by airmass^0.6.
+
+        Parameters
+        ----------
+        bands : list[str]
+            The bands to compute PSF sigma for.
+
+        Returns
+        -------
+        np.ndarray
+            PSF sigma in arcseconds for each band.
+        """
+        psf_fwhm = np.array([self.params.theta[band] for band in bands], dtype=float)
+        for i, band in enumerate(bands):
+            airmass = self.params.airmass[band]
+            if airmass is not None:
+                psf_fwhm[i] *= airmass**0.6
+        return psf_fwhm / _FWHM_TO_SIGMA
+
+    def _to_pogson(self, data: np.ndarray, bands: list[str]) -> np.ndarray:
         """Convert input data from input_type to Pogson magnitudes.
 
         Parameters
@@ -139,9 +201,8 @@ class ErrorModel:
                 return -2.5 * np.log10(data)
         else:  # asinh
             b = np.array([self._b[band] for band in bands])
-            a = 2.5 / np.log(10)
             with np.errstate(invalid="ignore"):
-                flux = 2 * b * np.sinh(-data / a - np.log(b))
+                flux = 2 * b * np.sinh(-data / _ASINH_A - np.log(b))
             with np.errstate(divide="ignore", invalid="ignore"):
                 return -2.5 * np.log10(flux)
 
@@ -149,7 +210,7 @@ class ErrorModel:
         self,
         mags: np.ndarray,
         errs: np.ndarray,
-        bands: list,
+        bands: list[str],
         obs_fluxes: np.ndarray | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Convert Pogson magnitudes and errors to the output_type format.
@@ -200,17 +261,16 @@ class ErrorModel:
 
         # asinh (luptitude) output
         b = np.array([self._b[band] for band in bands])
-        a = 2.5 / np.log(10)
         with np.errstate(invalid="ignore"):
-            lup = -a * (np.arcsinh(flux / (2 * b)) + np.log(b))
-            lup_err = a * flux_err / (2 * b * np.sqrt(1 + (flux / (2 * b)) ** 2))
+            lup = -_ASINH_A * (np.arcsinh(flux / (2 * b)) + np.log(b))
+            lup_err = _ASINH_A * flux_err / (2 * b * np.sqrt(1 + (flux / (2 * b)) ** 2))
         return lup, lup_err
 
     def _get_area_ratio_auto(
         self,
         majors: np.ndarray,
         minors: np.ndarray,
-        bands: list,
+        bands: list[str],
     ) -> np.ndarray:
         """Get the ratio between PSF area and galaxy aperture area for "auto" model.
 
@@ -220,7 +280,7 @@ class ErrorModel:
             The semi-major axes of the galaxies in arcseconds
         minors : np.ndarray
             The semi-minor axes of the galaxies in arcseconds
-        bands : list
+        bands : list[str]
             The list of bands to calculate ratios for
 
         Returns
@@ -228,32 +288,21 @@ class ErrorModel:
         np.ndarray
             The ratio of aperture size to PSF size for each band and galaxy.
         """
-        # get the psf size for each band
-        psf_size = np.array([self.params.theta[band] for band in bands])
-        airmass = np.array([self.params.airmass[band] for band in bands])
-        for i in range(len(airmass)):
-            if airmass[i] > 0:
-                psf_size[i] *= airmass[i] ** 0.6
-
-        # convert PSF FWHM to Gaussian sigma
-        psf_sig = psf_size / 2.355
-
-        # calculate the area of the psf in each band
+        psf_sig = self._get_psf_sig(bands)
         A_psf = np.pi * psf_sig**2
 
-        # calculate the area of the galaxy aperture in each band
+        # Aperture axes: PSF convolved with 2.5x half-light radius (van den Busch 2020)
         a_ap = np.sqrt(psf_sig[None, :] ** 2 + (2.5 * majors[:, None]) ** 2)
         b_ap = np.sqrt(psf_sig[None, :] ** 2 + (2.5 * minors[:, None]) ** 2)
         A_ap = np.pi * a_ap * b_ap
 
-        # return their ratio
         return A_ap / A_psf
 
     def _get_area_ratio_gaap(
         self,
         majors: np.ndarray,
         minors: np.ndarray,
-        bands: list,
+        bands: list[str],
     ) -> np.ndarray:
         """Get the ratio between PSF area and galaxy aperture area for "gaap" model.
 
@@ -263,7 +312,7 @@ class ErrorModel:
             The semi-major axes of the galaxies in arcseconds
         minors : np.ndarray
             The semi-minor axes of the galaxies in arcseconds
-        bands : list
+        bands : list[str]
             The list of bands to calculate ratios for
 
         Returns
@@ -271,44 +320,32 @@ class ErrorModel:
         np.ndarray
             The ratio of aperture size to PSF size for each band and galaxy.
         """
-        # get the psf size for each band
-        psf_size = np.array([self.params.theta[band] for band in bands])
-        airmass = np.array([self.params.airmass[band] for band in bands])
-        for i in range(len(airmass)):
-            if airmass[i] > 0:
-                psf_size[i] *= airmass[i] ** 0.6
-
-        # convert PSF FWHM to Gaussian sigma
-        psf_sig = psf_size / 2.355
+        psf_sig = self._get_psf_sig(bands)
 
         # convert min/max aperture diameter to Gaussian sigma
-        aMin_sig = self.params.aMin / 2.355
-        aMax_sig = self.params.aMax / 2.355
+        aMin_sig = self.params.aMin / _FWHM_TO_SIGMA
+        aMax_sig = self.params.aMax / _FWHM_TO_SIGMA
 
-        # convert galaxy half-light radii to Gaussian sigmas
-        # this conversion factor comes from half-IQR -> sigma
-        majors = majors / 0.6745
-        minors = minors / 0.6745
+        # convert galaxy half-light radii from half-IQR to Gaussian sigma
+        majors = majors / _HALF_IQR_TO_SIGMA
+        minors = minors / _HALF_IQR_TO_SIGMA
 
-        # calculate the area of the psf in each band
         A_psf = np.pi * psf_sig**2
 
-        # calculate the area of the galaxy aperture in each band
         a_ap = np.sqrt(psf_sig[None, :] ** 2 + majors[:, None] ** 2 + aMin_sig**2)
         a_ap[a_ap > aMax_sig] = aMax_sig
         b_ap = np.sqrt(psf_sig[None, :] ** 2 + minors[:, None] ** 2 + aMin_sig**2)
         b_ap[b_ap > aMax_sig] = aMax_sig
         A_ap = np.pi * a_ap * b_ap
 
-        # return their ratio
         return A_ap / A_psf
 
     def _get_nsr_from_mags(
         self,
         mags: np.ndarray,
-        majors: np.ndarray,
-        minors: np.ndarray,
-        bands: list,
+        majors: np.ndarray | None,
+        minors: np.ndarray | None,
+        bands: list[str],
     ) -> np.ndarray:
         """Calculate the noise-to-signal ratio.
 
@@ -319,11 +356,11 @@ class ErrorModel:
         ----------
         mags : np.ndarray
             The magnitudes of the galaxies
-        majors : np.ndarray
+        majors : np.ndarray or None
             The semi-major axes of the galaxies in arcseconds
-        minors : np.ndarray
+        minors : np.ndarray or None
             The semi-minor axes of the galaxies in arcseconds
-        bands : list
+        bands : list[str]
             The list of bands the galaxy is observed in
 
         Returns
@@ -333,11 +370,8 @@ class ErrorModel:
         """
         # get the 5-sigma limiting magnitudes for these bands
         m5 = np.array([self._all_m5[band] for band in bands])
-        # and the values for gamma
         gamma = np.array([self.params.gamma[band] for band in bands])
-        # and the number of visits per year
         nVisYr = np.array([self.params.nVisYr[band] for band in bands])
-        # and the scales
         scale = np.array([self.params.scale[band] for band in bands])
 
         # calculate x as defined in the paper
@@ -353,11 +387,13 @@ class ErrorModel:
 
         # rescale according to the area ratio
         if self.params.extendedType == "auto":
-            A_ratio = self._get_area_ratio_auto(majors, minors, bands)
+            A_ratio: np.ndarray | float = self._get_area_ratio_auto(
+                majors, minors, bands
+            )
         elif self.params.extendedType == "gaap":
             A_ratio = self._get_area_ratio_gaap(majors, minors, bands)
         else:
-            A_ratio = 1  # type: ignore
+            A_ratio = 1.0
         nsrRand *= np.sqrt(A_ratio)
 
         # rescale the NSR
@@ -377,9 +413,9 @@ class ErrorModel:
     def _get_mags_from_nsr(
         self,
         nsr: np.ndarray,
-        majors: np.ndarray,
-        minors: np.ndarray,
-        bands: list,
+        majors: np.ndarray | None,
+        minors: np.ndarray | None,
+        bands: list[str],
         coadded: bool = True,
     ) -> np.ndarray:
         """Calculate magnitudes that correspond to the given NSRs.
@@ -390,11 +426,11 @@ class ErrorModel:
         ----------
         nsr : np.ndarray
             The noise-to-signal ratios of the galaxies
-        majors : np.ndarray
+        majors : np.ndarray or None
             The semi-major axes of the galaxies in arcseconds
-        minors : np.ndarray
+        minors : np.ndarray or None
             The semi-minor axes of the galaxies in arcseconds
-        bands : list
+        bands : list[str]
             The list of bands the galaxy is observed in
         coadded : bool; default=True
             If True, assumes NSR is after coaddition.
@@ -404,13 +440,9 @@ class ErrorModel:
         np.ndarray
             The magnitude corresponding to the NSR for each galaxy
         """
-        # get the 5-sigma limiting magnitudes for these bands
         m5 = np.array([self._all_m5[band] for band in bands])
-        # and the values for gamma
         gamma = np.array([self.params.gamma[band] for band in bands])
-        # and the number of visits per year
         nVisYr = np.array([self.params.nVisYr[band] for band in bands])
-        # and the scales
         scale = np.array([self.params.scale[band] for band in bands])
 
         # get the irreducible system NSR
@@ -428,15 +460,19 @@ class ErrorModel:
         # rescale according to the area ratio
         if majors is not None and minors is not None:
             if self.params.extendedType == "auto":
-                A_ratio = self._get_area_ratio_auto(majors, minors, bands)
+                A_ratio: np.ndarray | float = self._get_area_ratio_auto(
+                    majors, minors, bands
+                )
             elif self.params.extendedType == "gaap":
                 A_ratio = self._get_area_ratio_gaap(majors, minors, bands)
             else:
-                A_ratio = 1  # type: ignore
+                A_ratio = 1.0
             nsrRand = nsrRand / np.sqrt(A_ratio)
 
         # get the number of exposures
-        nStackedObs = nVisYr * self.params.nYrObs if coadded else 1  # type: ignore
+        nStackedObs: np.ndarray | float = (
+            nVisYr * self.params.nYrObs if coadded else 1.0
+        )
 
         # calculate the NSR for a single image
         nsrRandSingleExp = nsrRand * np.sqrt(nStackedObs)
@@ -456,9 +492,9 @@ class ErrorModel:
     def _get_obs_and_errs(
         self,
         mags: np.ndarray,
-        majors: np.ndarray,
-        minors: np.ndarray,
-        bands: list,
+        majors: np.ndarray | None,
+        minors: np.ndarray | None,
+        bands: list[str],
         rng: np.random.Generator,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
         """Calculate observed magnitudes and photometric errors.
@@ -598,6 +634,13 @@ class ErrorModel:
 
         # get the semi-major and semi-minor axes
         if self.params.extendedType == "auto" or self.params.extendedType == "gaap":
+            for col in (self.params.majorCol, self.params.minorCol):
+                if col not in catalog.columns:
+                    raise ValueError(
+                        f"Column '{col}' not found in catalog. "
+                        f"extendedType='{self.params.extendedType}' requires columns "
+                        f"'{self.params.majorCol}' and '{self.params.minorCol}'."
+                    )
             majors = catalog[self.params.majorCol].to_numpy()
             minors = catalog[self.params.minorCol].to_numpy()
         else:
@@ -660,7 +703,7 @@ class ErrorModel:
         nSigma: float = 5,
         coadded: bool = True,
         aperture: float = 0,
-    ) -> dict:
+    ) -> dict[str, float]:
         """Return the limiting magnitudes in all bands.
 
         Parameters
@@ -676,19 +719,25 @@ class ErrorModel:
             Radius of circular aperture in arcseconds. If zero, limiting magnitudes
             are for point sources. If greater than zero, limiting magnitudes are
             for objects of that size. Increasing the aperture decreases the
-            signal-to-noise ratio. This only has an impact if extendedType != "point.
+            signal-to-noise ratio. This only has an impact if extendedType != "point".
 
         Returns
         -------
-        dict
-            The dictionary of limiting magnitudes
+        dict[str, float]
+            Band names mapped to limiting magnitudes.
+
+        Raises
+        ------
+        ValueError
+            If nSigma <= 0.
         """
-        # return as a dictionary
+        if nSigma <= 0:
+            raise ValueError(f"nSigma must be positive, got {nSigma}.")
         return dict(
             zip(
                 self._bands,
                 self._get_mags_from_nsr(
-                    1 / nSigma,  # type: ignore
+                    1.0 / nSigma,
                     np.array([aperture]),
                     np.array([aperture]),
                     self._bands,
