@@ -17,8 +17,8 @@ def test_clean_dictionaries() -> None:
     for key, param in LsstErrorParams(nVisYr={"g": 8}).__dict__.items():
         # for each dictionary parameter
         if isinstance(param, dict):
-            # m5 and asinh_b should be empty
-            if key == "m5" or key == "asinh_b":
+            # m5 and asinhB should be empty
+            if key == "m5" or key == "asinhB":
                 assert len(param) == 0
             # the other parameters should only contain g
             else:
@@ -118,9 +118,9 @@ def test_param_val_dict() -> None:
             "aMin must be less",
         ),
         ({"renameDict": -1}, TypeError, "renameDict must be a dict"),
-        ({"input_type": "test"}, ValueError, "must be one of"),
-        ({"output_type": "test"}, ValueError, "must be one of"),
-        ({"asinh_b": -1.0}, ValueError, "must be positive"),
+        ({"inputType": "test"}, ValueError, "must be one of"),
+        ({"outputType": "test"}, ValueError, "must be one of"),
+        ({"asinhB": -1.0}, ValueError, "must be positive"),
     ],
 )
 def test_bad_params(params: dict, error: type[Exception], match: str) -> None:

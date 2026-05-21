@@ -147,12 +147,12 @@ class ErrorModel:
         Results are stored in ``self._b``.
         """
         self._b: dict[str, float] = {}
-        if self.params.input_type != "asinh" and self.params.output_type != "asinh":
+        if self.params.inputType != "asinh" and self.params.outputType != "asinh":
             return
         m5_coadd = self.getLimitingMags(nSigma=5, coadded=True)
         for band in self._bands:
-            if band in self.params.asinh_b:
-                self._b[band] = self.params.asinh_b[band]
+            if band in self.params.asinhB:
+                self._b[band] = self.params.asinhB[band]
             else:
                 self._b[band] = 10 ** (-m5_coadd[band] / 2.5) / 5
 
@@ -180,12 +180,12 @@ class ErrorModel:
         return psf_fwhm / _FWHM_TO_SIGMA
 
     def _to_pogson(self, data: np.ndarray, bands: list[str]) -> np.ndarray:
-        """Convert input data from input_type to Pogson magnitudes.
+        """Convert input data from inputType to Pogson magnitudes.
 
         Parameters
         ----------
         data : np.ndarray
-            Input array in the format specified by self.params.input_type.
+            Input array in the format specified by self.params.inputType.
         bands : list
             The list of bands corresponding to columns of data.
 
@@ -194,9 +194,9 @@ class ErrorModel:
         np.ndarray
             Pogson magnitudes.
         """
-        if self.params.input_type == "pogson":
+        if self.params.inputType == "pogson":
             return data
-        elif self.params.input_type == "maggy":
+        elif self.params.inputType == "maggy":
             with np.errstate(divide="ignore", invalid="ignore"):
                 return -2.5 * np.log10(data)
         else:  # asinh
@@ -213,7 +213,7 @@ class ErrorModel:
         bands: list[str],
         obs_fluxes: np.ndarray | None = None,
     ) -> tuple[np.ndarray, np.ndarray]:
-        """Convert Pogson magnitudes and errors to the output_type format.
+        """Convert Pogson magnitudes and errors to the outputType format.
 
         Parameters
         ----------
@@ -232,9 +232,9 @@ class ErrorModel:
         Returns
         -------
         tuple[np.ndarray, np.ndarray]
-            Observed values and errors in the output_type format.
+            Observed values and errors in the outputType format.
         """
-        if self.params.output_type == "pogson":
+        if self.params.outputType == "pogson":
             return mags, errs
 
         # noise-to-signal ratio from Pogson errors
@@ -256,7 +256,7 @@ class ErrorModel:
         with np.errstate(invalid="ignore"):
             flux_err = np.abs(flux) * nsr
 
-        if self.params.output_type == "maggy":
+        if self.params.outputType == "maggy":
             return flux, flux_err
 
         # asinh (luptitude) output
@@ -522,7 +522,7 @@ class ErrorModel:
             observed fluxes in maggies (None for highSNR mode).
             Pogson magnitudes are +inf for negative observed fluxes.
             The signed fluxes preserve the sign and are used when
-            output_type is "maggy" or "asinh".
+            outputType is "maggy" or "asinh".
         """
         # get the NSR for all galaxies
         nsr = self._get_nsr_from_mags(mags, majors, minors, bands)
@@ -591,24 +591,24 @@ class ErrorModel:
     ) -> pd.DataFrame:
         """Calculate photometric errors for the catalog and return in DataFrame.
 
-        The format of the band columns is controlled by the input_type and
-        output_type parameters set at construction time.
+        The format of the band columns is controlled by the inputType and
+        outputType parameters set at construction time.
 
-        - input_type="pogson" (default): band columns contain Pogson magnitudes.
-        - input_type="maggy": band columns contain linear fluxes in maggies.
-        - input_type="asinh": band columns contain asinh magnitudes (luptitudes)
+        - inputType="pogson" (default): band columns contain Pogson magnitudes.
+        - inputType="maggy": band columns contain linear fluxes in maggies.
+        - inputType="asinh": band columns contain asinh magnitudes (luptitudes)
           as defined by Lupton et al. 1999.
 
-        The output follows the same convention for output_type. When
-        output_type is "maggy" or "asinh", sources with negative observed
+        The output follows the same convention for outputType. When
+        outputType is "maggy" or "asinh", sources with negative observed
         fluxes are preserved as valid measurements rather than flagged as
-        non-detections (as they would be for output_type="pogson").
+        non-detections (as they would be for outputType="pogson").
 
         Parameters
         ----------
         catalog : pd.DataFrame
             The input catalog in a pandas DataFrame. Band columns must be in
-            the format specified by input_type. Non-band columns (redshift,
+            the format specified by inputType. Non-band columns (redshift,
             half-light radii, etc.) are passed through unchanged.
         random_state : np.random.Generator, int, or None
             The random state. Can either be a numpy random generator
@@ -619,7 +619,7 @@ class ErrorModel:
         -------
         pd.DataFrame
             Catalog with band columns replaced by observed values in
-            output_type format, and error columns (band_err) added.
+            outputType format, and error columns (band_err) added.
             Non-detections are handled according to ndMode/ndFlag/sigLim.
         """
         # set the rng
@@ -664,7 +664,7 @@ class ErrorModel:
             else:
                 with np.errstate(divide="ignore", over="ignore"):
                     snr = 1 / (10 ** (obsMagErrs / 2.5) - 1)
-            if obs_fluxes is not None and self.params.output_type != "pogson":
+            if obs_fluxes is not None and self.params.outputType != "pogson":
                 flagged_idx = snr < self.params.sigLim
             else:
                 flagged_idx = (~np.isfinite(obsMags)) | (snr < self.params.sigLim)

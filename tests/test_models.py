@@ -483,20 +483,20 @@ def test_scale(highSNR: bool) -> None:
     assert np.allclose(ratio[1, 0], 2)
 
 
-def test_output_type_pogson_default(lsst_data: pd.DataFrame) -> None:
-    """Test that default output_type="pogson" gives the same result as before."""
+def test_outputType_pogson_default(lsst_data: pd.DataFrame) -> None:
+    """Test that default outputType="pogson" gives the same result as before."""
     m = LsstErrorModel()
-    m_explicit = LsstErrorModel(output_type="pogson")
+    m_explicit = LsstErrorModel(outputType="pogson")
     out1 = m(lsst_data, random_state=0)
     out2 = m_explicit(lsst_data, random_state=0)
     assert np.allclose(out1.to_numpy(), out2.to_numpy(), equal_nan=True)
 
 
-def test_output_type_maggy(lsst_data: pd.DataFrame) -> None:
-    """Test that output_type='maggy' is consistent with Pogson output."""
+def test_outputType_maggy(lsst_data: pd.DataFrame) -> None:
+    """Test that outputType='maggy' is consistent with Pogson output."""
     bands = list("ugrizy")
     pogson_out = LsstErrorModel()(lsst_data, random_state=0)
-    maggy_out = LsstErrorModel(output_type="maggy")(lsst_data, random_state=0)
+    maggy_out = LsstErrorModel(outputType="maggy")(lsst_data, random_state=0)
 
     # keep only rows that are finite in both outputs
     finite = np.isfinite(pogson_out[bands]).all(axis=1)
@@ -518,8 +518,8 @@ def test_output_type_maggy(lsst_data: pd.DataFrame) -> None:
     assert np.allclose(pogson_nsr, maggy_nsr, rtol=1e-5)
 
 
-def test_output_type_maggy_highsnr(lsst_data: pd.DataFrame) -> None:
-    """Test output_type='maggy' with highSNR=True hits the flux fallback path.
+def test_outputType_maggy_highsnr(lsst_data: pd.DataFrame) -> None:
+    """Test outputType='maggy' with highSNR=True hits the flux fallback path.
 
     With highSNR=True, obs_fluxes is None so _from_pogson derives flux from
     Pogson mags (lines 191-192 of model.py) instead of using signed observed
@@ -528,7 +528,7 @@ def test_output_type_maggy_highsnr(lsst_data: pd.DataFrame) -> None:
     """
     bands = list("ugrizy")
     pogson_out = LsstErrorModel(highSNR=True)(lsst_data, random_state=0)
-    maggy_out = LsstErrorModel(highSNR=True, output_type="maggy")(
+    maggy_out = LsstErrorModel(highSNR=True, outputType="maggy")(
         lsst_data, random_state=0
     )
 
@@ -545,12 +545,12 @@ def test_output_type_maggy_highsnr(lsst_data: pd.DataFrame) -> None:
     assert np.allclose(maggy_errs / maggy_vals, pogson_errs, rtol=1e-5)
 
 
-def test_output_type_asinh(lsst_data: pd.DataFrame) -> None:
-    """Test that output_type='asinh' is consistent with Pogson output."""
+def test_outputType_asinh(lsst_data: pd.DataFrame) -> None:
+    """Test that outputType='asinh' is consistent with Pogson output."""
     bands = list("ugrizy")
     a = 2.5 / np.log(10)
 
-    m = LsstErrorModel(output_type="asinh")
+    m = LsstErrorModel(outputType="asinh")
     pogson_out = LsstErrorModel()(lsst_data, random_state=0)
     asinh_out = m(lsst_data, random_state=0)
 
@@ -568,7 +568,7 @@ def test_output_type_asinh(lsst_data: pd.DataFrame) -> None:
     assert np.allclose(pogson_from_asinh, pogson_finite, rtol=1e-5)
 
 
-def test_input_type_maggy(lsst_data: pd.DataFrame) -> None:
+def test_inputType_maggy(lsst_data: pd.DataFrame) -> None:
     """Test that maggy -> pogson matches pogson -> pogson."""
     # convert catalog to maggies
     bands = list("ugrizy")
@@ -579,7 +579,7 @@ def test_input_type_maggy(lsst_data: pd.DataFrame) -> None:
     pogson_in = LsstErrorModel()(lsst_data, random_state=0)
 
     # estimate errors for maggies but return as pogson
-    maggy_in = LsstErrorModel(input_type="maggy", output_type="pogson")(
+    maggy_in = LsstErrorModel(inputType="maggy", outputType="pogson")(
         maggy_catalog, random_state=0
     )
 
@@ -591,12 +591,12 @@ def test_input_type_maggy(lsst_data: pd.DataFrame) -> None:
     )
 
 
-def test_input_type_asinh(lsst_data: pd.DataFrame) -> None:
+def test_inputType_asinh(lsst_data: pd.DataFrame) -> None:
     """Test that asinh -> pogson matches pogson -> pogson."""
     bands = list("ugrizy")
     a = 2.5 / np.log(10)
 
-    model = LsstErrorModel(input_type="asinh", output_type="pogson")
+    model = LsstErrorModel(inputType="asinh", outputType="pogson")
     b = np.array([model._b[band] for band in bands])
 
     # convert catalog to luptitudes
@@ -635,13 +635,13 @@ def test_negative_flux_preserved_for_maggy_asinh() -> None:
     assert np.any(~np.isfinite(pogson_out["g"])), "expected some non-finite Pogson mags"
 
     # With maggy output, all values should be finite (negative flux is valid)
-    maggy_out = LsstErrorModel(output_type="maggy", sigLim=0)(catalog, random_state=rng)
+    maggy_out = LsstErrorModel(outputType="maggy", sigLim=0)(catalog, random_state=rng)
     assert np.all(np.isfinite(maggy_out["g"])), "maggy output should be finite"
     assert np.all(np.isfinite(maggy_out["g_err"])), "maggy errors should be finite"
     assert np.any(maggy_out["g"] < 0), "some negative fluxes expected at mag=35"
 
     # With asinh output, all values should also be finite
-    asinh_out = LsstErrorModel(output_type="asinh", sigLim=0)(catalog, random_state=rng)
+    asinh_out = LsstErrorModel(outputType="asinh", sigLim=0)(catalog, random_state=rng)
     assert np.all(np.isfinite(asinh_out["g"])), "asinh output should be finite"
     assert np.all(np.isfinite(asinh_out["g_err"])), "asinh errors should be finite"
 
@@ -649,39 +649,39 @@ def test_negative_flux_preserved_for_maggy_asinh() -> None:
     # signed flux as maggy output (up to different random draws, so use same seed)
     rng2 = np.random.default_rng(7)
     catalog2 = pd.DataFrame({"g": np.full(500, 35.0)})
-    maggy_check = LsstErrorModel(output_type="maggy", sigLim=0)(
+    maggy_check = LsstErrorModel(outputType="maggy", sigLim=0)(
         catalog2, random_state=rng2
     )
     rng3 = np.random.default_rng(7)
-    asinh_check = LsstErrorModel(output_type="asinh", sigLim=0)(
+    asinh_check = LsstErrorModel(outputType="asinh", sigLim=0)(
         catalog2, random_state=rng3
     )
-    m = LsstErrorModel(output_type="asinh")
+    m = LsstErrorModel(outputType="asinh")
     b_g = m._b["g"]
     a = 2.5 / np.log(10)
     flux_from_lup = 2 * b_g * np.sinh(-asinh_check["g"].to_numpy() / a - np.log(b_g))
     assert np.allclose(flux_from_lup, maggy_check["g"].to_numpy(), rtol=1e-5)
 
 
-def test_asinh_b_override() -> None:
-    """Test that asinh_b can be overridden per-band or with a scalar."""
+def test_asinhB_override() -> None:
+    """Test that asinhB can be overridden per-band or with a scalar."""
     # scalar override: all bands get the same b
-    m_scalar = LsstErrorModel(output_type="asinh", asinh_b=1e-10)
+    m_scalar = LsstErrorModel(outputType="asinh", asinhB=1e-10)
     for band in "ugrizy":
         assert m_scalar._b[band] == 1e-10
 
     # dict override: only specified bands overridden
-    m_dict = LsstErrorModel(output_type="asinh", asinh_b={"g": 5e-11, "r": 2e-11})
+    m_dict = LsstErrorModel(outputType="asinh", asinhB={"g": 5e-11, "r": 2e-11})
     assert m_dict._b["g"] == 5e-11
     assert m_dict._b["r"] == 2e-11
     # other bands get auto-computed defaults
     assert m_dict._b["u"] != 5e-11
 
 
-def test_ndFlag_with_output_types(data: pd.DataFrame) -> None:
+def test_ndFlag_with_outputTypes(data: pd.DataFrame) -> None:
     """Test that non-detections are still flagged correctly for all output types."""
-    for output_type in ["pogson", "maggy", "asinh"]:
-        out = LsstErrorModel(output_type=output_type, sigLim=10)(data[["g"]], 0)
+    for outputType in ["pogson", "maggy", "asinh"]:
+        out = LsstErrorModel(outputType=outputType, sigLim=10)(data[["g"]], 0)
         # the super-low-SNR galaxy (mag=99) should be flagged in all output types
         assert out["g"].iloc[-1] == np.inf
         assert out["g_err"].iloc[-1] == np.inf
