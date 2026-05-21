@@ -55,6 +55,9 @@ class ErrorModel:
         # calculate all of the 5-sigma limiting magnitudes
         self._calculate_m5()
 
+        # calculate per-band softening parameters for asinh magnitudes
+        self._calculate_b()
+
     @property
     def params(self) -> ErrorParams:
         """The error model parameters in an ErrorParams objet."""  # noqa: D401
@@ -97,6 +100,111 @@ class ErrorModel:
 
         # save all the single-visit m5's together
         self._all_m5 = {band: m5[band] for band in self._bands}
+
+    def _calculate_b(self) -> None:
+        """Compute per-band softening parameters for asinh magnitudes.
+
+        Default b for each band is the coadded 1-sigma limiting flux:
+        b = 10^(-m5_coadd / 2.5) / 5.
+        """
+        self._b: dict[str, float] = {}
+        if self.params.input_type != "asinh" and self.params.output_type != "asinh":
+            return
+        m5_coadd = self.getLimitingMags(nSigma=5, coadded=True)
+        for band in self._bands:
+            if band in self.params.asinh_b:
+                self._b[band] = self.params.asinh_b[band]
+            else:
+                self._b[band] = 10 ** (-m5_coadd[band] / 2.5) / 5
+
+    def _to_pogson(self, data: np.ndarray, bands: list) -> np.ndarray:
+        """Convert input data from input_type to Pogson magnitudes.
+
+        Parameters
+        ----------
+        data : np.ndarray
+            Input array in the format specified by self.params.input_type.
+        bands : list
+            The list of bands corresponding to columns of data.
+
+        Returns
+        -------
+        np.ndarray
+            Pogson magnitudes.
+        """
+        if self.params.input_type == "pogson":
+            return data
+        elif self.params.input_type == "maggy":
+            with np.errstate(divide="ignore", invalid="ignore"):
+                return -2.5 * np.log10(data)
+        else:  # asinh
+            b = np.array([self._b[band] for band in bands])
+            a = 2.5 / np.log(10)
+            with np.errstate(invalid="ignore"):
+                flux = 2 * b * np.sinh(-data / a - np.log(b))
+            with np.errstate(divide="ignore", invalid="ignore"):
+                return -2.5 * np.log10(flux)
+
+    def _from_pogson(
+        self,
+        mags: np.ndarray,
+        errs: np.ndarray,
+        bands: list,
+        obs_fluxes: np.ndarray | None = None,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Convert Pogson magnitudes and errors to the output_type format.
+
+        Parameters
+        ----------
+        mags : np.ndarray
+            Observed Pogson magnitudes.
+        errs : np.ndarray
+            Photometric errors in Pogson magnitudes.
+        bands : list
+            The list of bands corresponding to columns of mags/errs.
+        obs_fluxes : np.ndarray or None
+            Signed observed fluxes in maggies from _get_obs_and_errs. When
+            provided, these are used as the output values for maggy/asinh
+            output instead of re-deriving fluxes from the Pogson mags (which
+            would lose the sign for negative-flux sources).
+
+        Returns
+        -------
+        tuple[np.ndarray, np.ndarray]
+            Observed values and errors in the output_type format.
+        """
+        if self.params.output_type == "pogson":
+            return mags, errs
+
+        # noise-to-signal ratio from Pogson errors
+        if self.params.highSNR:
+            nsr = errs
+        else:
+            with np.errstate(over="ignore", invalid="ignore"):
+                nsr = 10 ** (errs / 2.5) - 1
+
+        # use signed fluxes when available (preserves negative-flux sources);
+        # fall back to re-deriving from Pogson mags (always positive)
+        if obs_fluxes is not None:
+            flux = obs_fluxes
+        else:
+            with np.errstate(invalid="ignore"):
+                flux = 10 ** (-mags / 2.5)
+
+        # flux error: scale by |flux| since nsr = sigma_f / |f|
+        with np.errstate(invalid="ignore"):
+            flux_err = np.abs(flux) * nsr
+
+        if self.params.output_type == "maggy":
+            return flux, flux_err
+
+        # asinh (luptitude) output
+        b = np.array([self._b[band] for band in bands])
+        a = 2.5 / np.log(10)
+        with np.errstate(invalid="ignore"):
+            lup = -a * (np.arcsinh(flux / (2 * b)) + np.log(b))
+            lup_err = a * flux_err / (2 * b * np.sqrt(1 + (flux / (2 * b)) ** 2))
+        return lup, lup_err
 
     def _get_area_ratio_auto(
         self,
@@ -355,8 +463,8 @@ class ErrorModel:
         minors: np.ndarray,
         bands: list,
         rng: np.random.Generator,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """Calculate the noise-to-signal ratio.
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+        """Calculate observed magnitudes and photometric errors.
 
         Uses Eqs 4 and 5 from Ivezic 2019.
         If using extended errors, also rescales with square root of area ratio.
@@ -376,11 +484,17 @@ class ErrorModel:
 
         Returns
         -------
-        np.ndarray
-            The ratio of aperture size to PSF size for each band and galaxy.
+        tuple[np.ndarray, np.ndarray, np.ndarray | None]
+            Observed Pogson magnitudes, Pogson magnitude errors, and signed
+            observed fluxes in maggies (None for highSNR mode).
+            Pogson magnitudes are +inf for negative observed fluxes.
+            The signed fluxes preserve the sign and are used when
+            output_type is "maggy" or "asinh".
         """
         # get the NSR for all galaxies
         nsr = self._get_nsr_from_mags(mags, majors, minors, bands)
+
+        obsFluxes: np.ndarray | None = None
 
         if self.params.highSNR:
             # in the high SNR approximation, mag err ~ nsr, and we can model
@@ -393,17 +507,27 @@ class ErrorModel:
             # in the more accurate error model, we acknowledge err != nsr,
             # and we model errors as Gaussian in flux space
 
-            # calculate observed magnitudes
+            # calculate observed fluxes (signed; negative flux is physically valid)
             fluxes = 10 ** (mags / -2.5)
             obsFluxes = fluxes * (1 + rng.normal(scale=nsr))
             if self.params.absFlux:
                 obsFluxes = np.abs(obsFluxes)
+
+            # convert to Pogson mags; negative/zero flux gives +inf
             with np.errstate(divide="ignore"):
                 obsMags = -2.5 * np.log10(np.clip(obsFluxes, 0, None))
 
-        # if decorrelate, then we calculate new errors using the observed mags
+        # if decorrelate, re-estimate NSR from the observed state.
+        # For negative observed fluxes (obsMags=inf), fall back to |obsFluxes|
+        # to avoid propagating inf through the NSR calculation.
         if self.params.decorrelate:
-            nsr = self._get_nsr_from_mags(obsMags, majors, minors, bands)
+            if obsFluxes is not None and not np.all(np.isfinite(obsMags)):
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    abs_flux_mags = -2.5 * np.log10(np.abs(obsFluxes))
+                mags_for_decorr = np.where(np.isfinite(obsMags), obsMags, abs_flux_mags)
+                nsr = self._get_nsr_from_mags(mags_for_decorr, majors, minors, bands)
+            else:
+                nsr = self._get_nsr_from_mags(obsMags, majors, minors, bands)
 
         # if ndMode == sigLim, then clip at the n-sigma limit
         if self.params.ndMode == "sigLim":
@@ -418,12 +542,17 @@ class ErrorModel:
             nsr = np.clip(nsr, 0, nsrLim)
             obsMags = np.clip(obsMags, None, magLim)
 
+            # sync obsFluxes with the clipped Pogson mags for consistency
+            if obsFluxes is not None:
+                with np.errstate(invalid="ignore"):
+                    obsFluxes = 10 ** (-obsMags / 2.5)
+
         if self.params.highSNR:
             obsMagErrs = nsr
         else:
             obsMagErrs = 2.5 * np.log10(1 + nsr)
 
-        return obsMags, obsMagErrs
+        return obsMags, obsMagErrs, obsFluxes
 
     def __call__(
         self,
@@ -432,11 +561,26 @@ class ErrorModel:
     ) -> pd.DataFrame:
         """Calculate photometric errors for the catalog and return in DataFrame.
 
+        The format of the band columns is controlled by the input_type and
+        output_type parameters set at construction time.
+
+        - input_type="pogson" (default): band columns contain Pogson magnitudes.
+        - input_type="maggy": band columns contain linear fluxes in maggies.
+        - input_type="asinh": band columns contain asinh magnitudes (luptitudes)
+          as defined by Lupton et al. 1999.
+
+        The output follows the same convention for output_type. When
+        output_type is "maggy" or "asinh", sources with negative observed
+        fluxes are preserved as valid measurements rather than flagged as
+        non-detections (as they would be for output_type="pogson").
+
         Parameters
         ----------
         catalog : pd.DataFrame
-            The input catalog of galaxies in a pandas DataFrame.
-        random_sate : np.random.Generator, int, or None
+            The input catalog in a pandas DataFrame. Band columns must be in
+            the format specified by input_type. Non-band columns (redshift,
+            half-light radii, etc.) are passed through unchanged.
+        random_state : np.random.Generator, int, or None
             The random state. Can either be a numpy random generator
             (e.g. np.random.default_rng(42)), an integer (which is used
             to seed np.random.default_rng), or None.
@@ -444,6 +588,9 @@ class ErrorModel:
         Returns
         -------
         pd.DataFrame
+            Catalog with band columns replaced by observed values in
+            output_type format, and error columns (band_err) added.
+            Non-detections are handled according to ndMode/ndFlag/sigLim.
         """
         # set the rng
         rng = np.random.default_rng(random_state)
@@ -451,8 +598,9 @@ class ErrorModel:
         # get the bands we will calculate errors for
         bands = [band for band in catalog.columns if band in self._bands]
 
-        # get the numpy array of magnitudes
-        mags = catalog[bands].to_numpy()
+        # get the numpy array of input data and convert to Pogson magnitudes
+        data = catalog[bands].to_numpy()
+        mags = self._to_pogson(data, bands)
 
         # get the semi-major and semi-minor axes
         if self.params.extendedType == "auto" or self.params.extendedType == "gaap":
@@ -462,31 +610,45 @@ class ErrorModel:
             majors = None
             minors = None
 
-        # get observed magnitudes and errors
-        obsMags, obsMagErrs = self._get_obs_and_errs(mags, majors, minors, bands, rng)
+        # get observed magnitudes and errors (always in Pogson space);
+        # obs_fluxes are the signed observed fluxes (None for highSNR mode)
+        obsMags, obsMagErrs, obs_fluxes = self._get_obs_and_errs(
+            mags, majors, minors, bands, rng
+        )
 
-        # flag all non-detections with the ndFlag
+        # identify non-detections in Pogson space before output conversion.
+        # For maggy/asinh output with signed fluxes available, skip the
+        # non-finite Pogson mag check: negative fluxes give inf Pogson mags
+        # but are valid measurements in those output types.
+        flagged_idx = np.zeros(obsMags.shape, dtype=bool)
         if self.params.ndMode == "flag":
-            # calculate SNR
             if self.params.highSNR:
                 snr = 1 / obsMagErrs
             else:
-                snr = 1 / (10 ** (obsMagErrs / 2.5) - 1)
+                with np.errstate(divide="ignore", over="ignore"):
+                    snr = 1 / (10 ** (obsMagErrs / 2.5) - 1)
+            if obs_fluxes is not None and self.params.output_type != "pogson":
+                flagged_idx = snr < self.params.sigLim
+            else:
+                flagged_idx = (~np.isfinite(obsMags)) | (snr < self.params.sigLim)
 
-            # flag non-finite mags and where SNR is below sigLim
-            idx = (~np.isfinite(obsMags)) | (snr < self.params.sigLim)
-            obsMags[idx] = self.params.ndFlag
-            obsMagErrs[idx] = self.params.ndFlag
+        # convert to the requested output type, passing signed fluxes when available
+        obsOut, errOut = self._from_pogson(obsMags, obsMagErrs, bands, obs_fluxes)
+
+        # apply ndFlag to non-detections
+        if self.params.ndMode == "flag":
+            obsOut[flagged_idx] = self.params.ndFlag
+            errOut[flagged_idx] = self.params.ndFlag
 
         # save the observations in a DataFrame
         errDf = pd.DataFrame(
-            obsMagErrs, columns=[f"{band}_err" for band in bands], index=catalog.index
+            errOut, columns=[f"{band}_err" for band in bands], index=catalog.index
         )
         if self.params.errLoc == "alone":
             obsCatalog = errDf
         else:
             magDf = catalog.copy()
-            magDf[bands] = obsMags
+            magDf[bands] = obsOut
             obsCatalog = pd.concat([magDf, errDf], axis=1)
 
         if self.params.errLoc == "after":

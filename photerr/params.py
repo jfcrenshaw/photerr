@@ -53,18 +53,30 @@ param_docstring = """
         The irreducible error of the system in AB magnitudes. Sets the minimum
         photometric error.
     sigLim : float; default=0
-        The n-sigma detection limit. Magnitudes beyond this limit are treated as
-        non-detections. For example, if sigLim=1, then all magnitudes beyond the
-        1-sigma limit in each band are treated as non-detections. sigLim=0
-        corresponds to only treating negative fluxes as non-detections.
+        The n-sigma detection limit. Sources below this limit are treated as
+        non-detections. For example, if sigLim=1, then all sources with SNR
+        below 1 in each band are treated as non-detections. sigLim=0 means
+        no detection threshold is applied. For output_type="pogson" (the
+        default), negative observed fluxes additionally count as
+        non-detections regardless of sigLim, because they cannot be
+        represented as Pogson magnitudes. For output_type="maggy" or
+        "asinh", negative fluxes are valid measurements; only the sigLim
+        SNR threshold applies.
     ndMode : str; default="flag"
         The non-detection mode. I.e. how should the model handle non-detections?
-        Non-detections are defined as magnitudes beyond sigLim (see above).
+        Non-detections are sources with SNR below sigLim (see above); for
+        output_type="pogson", sources with negative observed flux are also
+        non-detections.
         There are two options:
-            - "flag" - non-detections are flagged using the ndFlag (see below)
-            - "sigLim" - magnitudes are clipped at the n-sigma limits. I.e. if
-                sigLim=1 above, then all magnitudes greater than the 1-sigma limit
-                in each band are replaced with the 1-sigma limiting magnitude.
+            - "flag" - non-detections are flagged using the ndFlag (see below).
+                With sigLim=0 (the default) and output_type="maggy" or "asinh",
+                nothing is ever flagged and all negative-flux sources receive
+                valid output values.
+            - "sigLim" - all sub-threshold sources are replaced by the
+                n-sigma detection limit. Note that for output_type="maggy" or
+                "asinh", this replaces negative-flux sources with the positive
+                limiting flux, discarding sign information. Use ndMode="flag"
+                if you need to preserve negative fluxes.
     ndFlag : float; default=np.inf
         Flag for non-detections when ndMode == "flag".
     absFlux : bool; default=False
@@ -87,6 +99,21 @@ param_docstring = """
     minorCol : str; default="minor"
         The name of the column containing the semi-minor axes of the galaxies (in
         arcseconds). The length scales corresponds to the half-light radius.
+    input_type : str; default="pogson"
+        The format of the input data. Options:
+        - "pogson" — standard Pogson magnitudes (default)
+        - "maggy" — linear fluxes in maggies, where a 0 mag source has flux 1
+        - "asinh" — asinh magnitudes (luptitudes) as defined in Lupton et al. 1999
+    output_type : str; default="pogson"
+        The format of the output data. Options are the same as input_type.
+        Note that getLimitingMags always returns Pogson magnitudes regardless
+        of this setting.
+    asinh_b : dict or float; default={}
+        The softening parameter b (in maggies) used for asinh magnitude
+        conversions. Only relevant when input_type or output_type is "asinh".
+        If not provided for a band, defaults to the coadded 1-sigma limiting
+        flux for that band (i.e. 10^(-m5_coadd/2.5) / 5). The same b values
+        are used for both input and output conversions.
     decorrelate : bool; default=True
         Whether or not to decorrelate the photometric errors. If True, after calculating
         observed magnitudes, the errors are re-calculated using the observed magnitudes.
@@ -187,6 +214,9 @@ _val_dict = {
     "aMax": (False, (int, float), (), False),
     "majorCol": (False, (str,), (), None),
     "minorCol": (False, (str,), (), None),
+    "input_type": (False, (str,), ("pogson", "maggy", "asinh"), None),
+    "output_type": (False, (str,), ("pogson", "maggy", "asinh"), None),
+    "asinh_b": (True, (int, float), (), False),
     "decorrelate": (False, (bool,), (), None),
     "highSNR": (False, (bool,), (), None),
     "scale": (True, (int, float), (), None),
@@ -228,6 +258,10 @@ class ErrorParams:
     aMax: float = 2.0
     majorCol: str = "major"
     minorCol: str = "minor"
+
+    input_type: str = "pogson"
+    output_type: str = "pogson"
+    asinh_b: dict[str, float] | float = field(default_factory=lambda: {})
 
     decorrelate: bool = True
     highSNR: bool = False
@@ -310,7 +344,7 @@ class ErrorParams:
 
         # remove the m5 bands from all other parameter dictionaries, and remove
         # bands from all_bands for which we don't have m5 data for
-        ignore_dicts = ["m5", "nVisYr", "gamma", "scale"]
+        ignore_dicts = ["m5", "nVisYr", "gamma", "scale", "asinh_b"]
         for key, param in self.__dict__.items():
             # get the parameters that are dictionaries
             if isinstance(param, dict) and key not in ignore_dicts:

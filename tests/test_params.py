@@ -20,6 +20,9 @@ def test_clean_dictionaries() -> None:
             # m5 should be empty
             if key == "m5":
                 assert len(param) == 0
+            # asinh_b has no defaults in params; it stays empty until model init
+            elif key == "asinh_b":
+                assert len(param) == 0
             # the other parameters should only contain g
             else:
                 assert list(param.keys()) == ["g"]
@@ -114,6 +117,9 @@ def test_param_val_dict() -> None:
         ({"extendedType": "auto", "theta": {}}, ValueError),
         ({"extendedType": "auto", "aMin": 3, "aMax": 2}, ValueError),
         ({"renameDict": -1}, TypeError),
+        ({"input_type": "test"}, ValueError),
+        ({"output_type": "test"}, ValueError),
+        ({"asinh_b": -1.0}, ValueError),
     ],
 )
 def test_bad_params(params: dict, error: Exception) -> None:
