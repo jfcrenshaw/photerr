@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import InitVar, dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -56,24 +56,24 @@ param_docstring = """
         The n-sigma detection limit. Sources below this limit are treated as
         non-detections. For example, if sigLim=1, then all sources with SNR
         below 1 in each band are treated as non-detections. sigLim=0 means
-        no detection threshold is applied. For output_type="pogson" (the
+        no detection threshold is applied. For outputType="pogson" (the
         default), negative observed fluxes additionally count as
         non-detections regardless of sigLim, because they cannot be
-        represented as Pogson magnitudes. For output_type="maggy" or
+        represented as Pogson magnitudes. For outputType="maggy" or
         "asinh", negative fluxes are valid measurements; only the sigLim
         SNR threshold applies.
     ndMode : str; default="flag"
         The non-detection mode. I.e. how should the model handle non-detections?
         Non-detections are sources with SNR below sigLim (see above); for
-        output_type="pogson", sources with negative observed flux are also
+        outputType="pogson", sources with negative observed flux are also
         non-detections.
         There are two options:
             - "flag" - non-detections are flagged using the ndFlag (see below).
-                With sigLim=0 (the default) and output_type="maggy" or "asinh",
+                With sigLim=0 (the default) and outputType="maggy" or "asinh",
                 nothing is ever flagged and all negative-flux sources receive
                 valid output values.
             - "sigLim" - all sub-threshold sources are replaced by the
-                n-sigma detection limit. Note that for output_type="maggy" or
+                n-sigma detection limit. Note that for outputType="maggy" or
                 "asinh", this replaces negative-flux sources with the positive
                 limiting flux, discarding sign information. Use ndMode="flag"
                 if you need to preserve negative fluxes.
@@ -99,18 +99,18 @@ param_docstring = """
     minorCol : str; default="minor"
         The name of the column containing the semi-minor axes of the galaxies (in
         arcseconds). The length scales corresponds to the half-light radius.
-    input_type : str; default="pogson"
+    inputType : str; default="pogson"
         The format of the input data. Options:
         - "pogson" — standard Pogson magnitudes (default)
         - "maggy" — linear fluxes in maggies, where a 0 mag source has flux 1
         - "asinh" — asinh magnitudes (luptitudes) as defined in Lupton et al. 1999
-    output_type : str; default="pogson"
-        The format of the output data. Options are the same as input_type.
+    outputType : str; default="pogson"
+        The format of the output data. Options are the same as inputType.
         Note that getLimitingMags always returns Pogson magnitudes regardless
         of this setting.
-    asinh_b : dict or float; default={}
+    asinhB : dict or float; default={}
         The softening parameter b (in maggies) used for asinh magnitude
-        conversions. Only relevant when input_type or output_type is "asinh".
+        conversions. Only relevant when inputType or outputType is "asinh".
         If not provided for a band, defaults to the coadded 1-sigma limiting
         flux for that band (i.e. 10^(-m5_coadd/2.5) / 5). The same b values
         are used for both input and output conversions.
@@ -196,7 +196,7 @@ _val_dict = {
     "gamma": (True, (int, float), (), False),
     "m5": (True, (int, float), (), True),
     "tvis": (True, (int, float), (), False),
-    "airmass": (True, (int, float), (), False),
+    "airmass": (True, (int, float, type(None)), (), False),
     "Cm": (True, (int, float), (), True),
     "dCmInf": (True, (int, float), (), True),
     "msky": (True, (int, float), (), True),
@@ -214,9 +214,9 @@ _val_dict = {
     "aMax": (False, (int, float), (), False),
     "majorCol": (False, (str,), (), None),
     "minorCol": (False, (str,), (), None),
-    "input_type": (False, (str,), ("pogson", "maggy", "asinh"), None),
-    "output_type": (False, (str,), ("pogson", "maggy", "asinh"), None),
-    "asinh_b": (True, (int, float), (), False),
+    "inputType": (False, (str,), ("pogson", "maggy", "asinh"), None),
+    "outputType": (False, (str,), ("pogson", "maggy", "asinh"), None),
+    "asinhB": (True, (int, float), (), False),
     "decorrelate": (False, (bool,), (), None),
     "highSNR": (False, (bool,), (), None),
     "scale": (True, (int, float), (), None),
@@ -237,7 +237,7 @@ class ErrorParams:
     m5: dict[str, float] | float = field(default_factory=lambda: {})
 
     tvis: dict[str, float] | float = field(default_factory=lambda: {})
-    airmass: dict[str, float] | float = field(default_factory=lambda: {})
+    airmass: dict[str, float | None] | float | None = field(default_factory=lambda: {})
     Cm: dict[str, float] | float = field(default_factory=lambda: {})
     dCmInf: dict[str, float] | float = field(default_factory=lambda: {})
     msky: dict[str, float] | float = field(default_factory=lambda: {})
@@ -249,36 +249,44 @@ class ErrorParams:
     sigmaSys: float = 0.005
 
     sigLim: float = 0
-    ndMode: str = "flag"
+    ndMode: Literal["flag", "sigLim"] = "flag"
     ndFlag: float = np.inf
     absFlux: bool = False
 
-    extendedType: str = "point"
+    extendedType: Literal["point", "auto", "gaap"] = "point"
     aMin: float = 0.7
     aMax: float = 2.0
     majorCol: str = "major"
     minorCol: str = "minor"
 
-    input_type: str = "pogson"
-    output_type: str = "pogson"
-    asinh_b: dict[str, float] | float = field(default_factory=lambda: {})
+    inputType: Literal["pogson", "maggy", "asinh"] = "pogson"
+    outputType: Literal["pogson", "maggy", "asinh"] = "pogson"
+    asinhB: dict[str, float] | float = field(default_factory=lambda: {})
 
     decorrelate: bool = True
     highSNR: bool = False
     scale: dict[str, float] | float = field(default_factory=lambda: {})
 
-    errLoc: str = "after"
+    errLoc: Literal["after", "end", "alone"] = "after"
 
     renameDict: InitVar[dict[str, str] | None] = None
     validate: InitVar[bool] = True
 
     def __post_init__(self, renameDict: dict[str, str] | None, validate: bool) -> None:
-        """Rename bands and remove duplicate parameters."""
+        """Convert scalars to dicts, rename bands, validate, and clean parameters.
+
+        Raises
+        ------
+        ValueError
+            If nYrObs is zero.
+            If extended error types are used but theta or airmass are incomplete.
+            If aMin >= aMax.
+        """
         # make sure all dictionaries are dictionaries
         self._convert_to_dict()
 
         # rename the bands
-        self.rename_bands(renameDict)
+        self.renameBands(renameDict)
 
         # validate the parameters
         if validate:
@@ -287,12 +295,16 @@ class ErrorParams:
         # clean up the dictionaries
         self._clean_dictionaries()
 
+        # nYrObs=0 passes the non-negative check but causes division by zero downstream
+        if self.nYrObs == 0:
+            raise ValueError("nYrObs must be positive (got 0).")
+
         # if using extended error types,
         if self.extendedType == "auto" or self.extendedType == "gaap":
-            # make sure theta is provided for every band
+            # make sure theta and airmass are provided for every band
             if set(self.theta.keys()) != set(self.nVisYr.keys()) or set(
                 self.airmass.keys()
-            ) != set(self.airmass.keys()):
+            ) != set(self.nVisYr.keys()):
                 raise ValueError(
                     "If using one of the extended error types "
                     "(i.e. extendedType == 'auto' or 'gaap'), "
@@ -304,7 +316,13 @@ class ErrorParams:
                 raise ValueError("aMin must be less than aMax.")
 
     def _convert_to_dict(self) -> None:
-        """For dict parameters that aren't dicts, convert to dicts."""
+        """For dict parameters that aren't dicts, convert to dicts.
+
+        Raises
+        ------
+        ValueError
+            If no dictionary parameter is provided, so band names cannot be inferred.
+        """
         # first loop over all the parameters and get a list of every band
         bands = []
         for param in self.__dict__.values():
@@ -325,7 +343,7 @@ class ErrorParams:
 
             # if it should be a dictionary but it's not
             if is_dict and not isinstance(param, dict):
-                self.__dict__[key] = {band: param for band in bands}
+                self.__dict__[key] = dict.fromkeys(bands, param)
 
     def _clean_dictionaries(self) -> None:
         """Remove unnecessary info from all of the dictionaries.
@@ -338,13 +356,18 @@ class ErrorParams:
 
         Finally, we will set scale=1 for all bands for which the scale isn't
         explicitly set.
+
+        Raises
+        ------
+        ValueError
+            If no bands remain after removing under-specified entries.
         """
         # keep a running set of all the bands we will calculate errors for
         all_bands = set(self.nVisYr.keys()).intersection(self.gamma.keys())
 
         # remove the m5 bands from all other parameter dictionaries, and remove
         # bands from all_bands for which we don't have m5 data for
-        ignore_dicts = ["m5", "nVisYr", "gamma", "scale", "asinh_b"]
+        ignore_dicts = ["m5", "nVisYr", "gamma", "scale", "asinhB"]
         for key, param in self.__dict__.items():
             # get the parameters that are dictionaries
             if isinstance(param, dict) and key not in ignore_dicts:
@@ -383,7 +406,7 @@ class ErrorParams:
             for band in self.nVisYr
         }
 
-    def rename_bands(self, renameDict: dict[str, str] | None) -> None:
+    def renameBands(self, renameDict: dict[str, str] | None) -> None:
         """Rename the bands used in the error model.
 
         This method might be useful if you want to use the default parameters for an
@@ -391,9 +414,14 @@ class ErrorParams:
 
         Parameters
         ----------
-        renameDict: dict
+        renameDict : dict[str, str] or None
             A dictionary containing key: value pairs {old_name: new_name}.
-            For example map={"u": "lsst_u"} will rename the u band to lsst_u.
+            For example ``{"u": "lsst_u"}`` will rename the u band to lsst_u.
+
+        Raises
+        ------
+        TypeError
+            If renameDict is not a dict or None.
         """
         if renameDict is None:
             return
@@ -406,14 +434,32 @@ class ErrorParams:
             if isinstance(param, dict):
                 # rename bands in-place
                 self.__dict__[key] = {
-                    (
-                        old_name if old_name not in renameDict else renameDict[old_name]
-                    ): val
+                    renameDict.get(old_name, old_name): val
                     for old_name, val in param.items()
                 }
 
     def update(self, *args: dict, **kwargs: Any) -> None:
-        """Update parameters using either a dictionary or keyword arguments."""
+        """Update parameters using a dictionary or keyword arguments.
+
+        If a single positional dict is given, it is treated as keyword arguments.
+        All changes are atomic: if validation fails the params are fully rolled back.
+
+        Parameters
+        ----------
+        *args : dict, optional
+            A single optional positional argument that must be a dict of
+            parameter names to new values.
+        **kwargs
+            Parameter names and values to update.
+
+        Raises
+        ------
+        ValueError
+            If more than one positional argument is passed, or if an unknown
+            parameter name is given, or if the new values fail validation.
+        TypeError
+            If the positional argument is not a dict.
+        """
         # if non-keyword arguments passed, make sure it is just a single dictionary
         # and pass it back through as keyword arguments.
         if len(args) > 1:
@@ -451,6 +497,8 @@ class ErrorParams:
             self.__post_init__(renameDict=renameDict, validate=validate)
 
         except Exception as error:
+            # broad catch intentional: roll back even on unexpected errors so the
+            # object is never left in a partially-modified state
             self.__dict__ = safe_copy.__dict__
             raise error
 
@@ -461,11 +509,11 @@ class ErrorParams:
     @staticmethod
     def _check_single_param(
         key: str,
-        subkey: str,
+        subkey: str | None,
         param: Any,
-        allowed_types: list,
-        allowed_values: list,
-        negative_allowed: bool,
+        allowed_types: tuple[type, ...],
+        allowed_values: tuple[str, ...],
+        negative_allowed: bool | None,
     ) -> None:
         """Check that this single parameter has the correct type/value."""
         name = key if subkey is None else f"{key}.{subkey}"

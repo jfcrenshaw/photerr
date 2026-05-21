@@ -1,10 +1,11 @@
 """Photometric error model for LSST as of Feb 28, 2024."""
 
 from dataclasses import dataclass, field
-from typing import Any
 
-from photerr.model import ErrorModel
+from photerr.model import ErrorModel, _make_survey_model
 from photerr.params import ErrorParams, param_docstring
+
+__all__ = ["LsstErrorModelV2", "LsstErrorParamsV2"]
 
 
 @dataclass
@@ -53,7 +54,7 @@ class LsstErrorParamsV2(ErrorParams):
             "y": 30,
         }
     )
-    airmass: dict[str, float] | float = field(
+    airmass: dict[str, float | None] | float | None = field(
         default_factory=lambda: {
             "u": 1.15,
             "g": 1.15,
@@ -127,17 +128,4 @@ class LsstErrorParamsV2(ErrorParams):
     tvisRef: float | None = 30
 
 
-class LsstErrorModelV2(ErrorModel):
-    """Photometric error model for LSST, version 2.
-
-    Below is the parameter docstring:
-    """
-
-    __doc__ += LsstErrorParamsV2.__doc__
-
-    def __init__(self, **kwargs: Any) -> None:
-        """Create an LSST error model.
-
-        Keyword arguments override default values in LsstErrorParams.
-        """
-        super().__init__(LsstErrorParamsV2(**kwargs))
+LsstErrorModelV2: type[ErrorModel] = _make_survey_model(LsstErrorParamsV2)

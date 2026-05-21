@@ -118,7 +118,7 @@ By default `sigLim=0`, meaning no SNR threshold is applied.
 If you set `sigLim=1`, any source with SNR below 1 in a given band will be treated as a non-detection in that band.
 You can set `sigLim` to any non-negative float.
 
-When using the default `output_type="pogson"`, sources with negative observed fluxes are always treated as non-detections regardless of `sigLim`, because negative fluxes cannot be represented as Pogson magnitudes.
+When using the default `outputType="pogson"`, sources with negative observed fluxes are always treated as non-detections regardless of `sigLim`, because negative fluxes cannot be represented as Pogson magnitudes.
 
 The `ndMode` parameter tells the error model how to handle the non-detections.
 By default `ndMode="flag"`, which means the model will flag non-detections with the value set by `ndFlag`, which defaults to `np.inf`.
@@ -130,7 +130,7 @@ If `absFlux=True`, the absolute value of all fluxes are taken before converting 
 If combined with `sigLim=0`, this means every galaxy will have an observed flux in every band.
 This is useful if you do not want to worry about non-detections, but it results in a non-Gaussian error distribution for the flux of low-SNR sources.
 
-The cleanest way to avoid non-detections while preserving the correct (Gaussian-in-flux) error distribution is to use `output_type="maggy"` or `output_type="asinh"` instead.
+The cleanest way to avoid non-detections while preserving the correct (Gaussian-in-flux) error distribution is to use `outputType="maggy"` or `outputType="asinh"` instead.
 In these modes, negative observed fluxes are **not** flagged as non-detections — they are valid measurements, as they should be for very faint sources near the noise floor.
 No change to `sigLim` is needed: the default `sigLim=0` already means no detection threshold is applied, so all negative-flux sources are preserved.
 See *[Using alternative magnitude/flux systems](#using-alternative-magnitudeflux-systems)* below.
@@ -157,7 +157,7 @@ The band-independent systematic error floor, `sigmaSys` is still the same, and s
 ### *Using alternative magnitude/flux systems*
 
 By default, PhotErr expects input magnitudes and returns output magnitudes in standard Pogson magnitudes (i.e., $m = -2.5 \log_{10}(f/f_0)$).
-You can change this with the `input_type` and `output_type` parameters, each of which accepts one of three values:
+You can change this with the `inputType` and `outputType` parameters, each of which accepts one of three values:
 
 - `"pogson"` (default) — standard Pogson magnitudes.
 - `"maggy"` — linear fluxes in *maggies*, where a source with magnitude $m = 0$ has flux $f = 1$ maggy (i.e. $f = 10^{-m/2.5}$).
@@ -167,26 +167,26 @@ $$\mu = -\frac{2.5}{\ln 10}\left[\text{arcsinh}\!\left(\frac{f}{2b}\right) + \ln
 
 where $f$ is the flux in maggies and $b$ is a per-band softening parameter in maggies.
 
-`input_type` and `output_type` are independent: you can, for example, read in asinh magnitudes and get back maggies, or read in Pogson magnitudes and get back asinh magnitudes.
+`inputType` and `outputType` are independent: you can, for example, read in asinh magnitudes and get back maggies, or read in Pogson magnitudes and get back asinh magnitudes.
 
 For example,
 
 ```python
 # Read Pogson mags, return linear fluxes in maggies
-errModel = LsstErrorModel(output_type="maggy")
+errModel = LsstErrorModel(outputType="maggy")
 obs = errModel(catalog_pogson, random_state=42)  # obs band columns are in maggies
 
 # Read and return asinh magnitudes (luptitudes)
-errModel = LsstErrorModel(input_type="asinh", output_type="asinh")
+errModel = LsstErrorModel(inputType="asinh", outputType="asinh")
 obs = errModel(catalog_luptitude, random_state=42)
 ```
 
-**Softening parameter** `asinh_b`
+**Softening parameter** `asinhB`
 
 The asinh magnitude formula requires a per-band softening parameter $b$ (in maggies) that controls the flux scale at which the transition from logarithmic to linear behavior occurs.
 By default, $b$ is set to the coadded 1$\sigma$ limiting flux in each band, which places the softening at the survey noise floor — a natural and commonly used choice.
-You can override this per-band or globally with the `asinh_b` parameter.
-Note that if your data is already in asinh magnitudes (i.e., you set `input_type="asinh"`) make sure you set `asinh_b` equal to the values used in the creation of your catalog!
+You can override this per-band or globally with the `asinhB` parameter.
+Note that if your data is already in asinh magnitudes (i.e., you set `inputType="asinh"`) make sure you set `asinhB` equal to the values used in the creation of your catalog!
 
 
 **Negative fluxes and interaction with `sigLim` / `ndMode`**
@@ -194,7 +194,7 @@ Note that if your data is already in asinh magnitudes (i.e., you set `input_type
 The key advantage of maggies and asinh magnitudes over Pogson magnitudes is that they are well-defined for negative observed fluxes.
 For very faint sources near the noise floor, the observed flux is drawn from a distribution centred on the true (positive) flux with standard deviation $\sigma_f = f_\text{true} \times \text{NSR}$.
 When $\text{NSR} \gtrsim 1$, a substantial fraction of draws will be negative.
-If you wish to preserve the full Gaussian noise distribution at the low-SNR end, use either `input_type="maggy"` or `input_type="asinh"`, and leave `sigLim=0` and `ndMode="flag"` (these are the defaults).
+If you wish to preserve the full Gaussian noise distribution at the low-SNR end, use either `inputType="maggy"` or `inputType="asinh"`, and leave `sigLim=0` and `ndMode="flag"` (these are the defaults).
 
 ### *Other error models*
 

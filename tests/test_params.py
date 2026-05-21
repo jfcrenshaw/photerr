@@ -17,11 +17,8 @@ def test_clean_dictionaries() -> None:
     for key, param in LsstErrorParams(nVisYr={"g": 8}).__dict__.items():
         # for each dictionary parameter
         if isinstance(param, dict):
-            # m5 should be empty
-            if key == "m5":
-                assert len(param) == 0
-            # asinh_b has no defaults in params; it stays empty until model init
-            elif key == "asinh_b":
+            # m5 and asinhB should be empty
+            if key == "m5" or key == "asinhB":
                 assert len(param) == 0
             # the other parameters should only contain g
             else:
@@ -35,11 +32,11 @@ def test_clean_dictionaries() -> None:
 
 def test_no_bands_left() -> None:
     """Test that dictionary params without sufficient overlap results in no bands."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="no bands left"):
         LsstErrorParams(nVisYr={"K": 10})
 
 
-def test_rename_bands() -> None:
+def test_renameBands() -> None:
     """Test that band renaming works properly."""
     renameDict = {band: f"lsst_{band}" for band in "ugrizy"}
 
@@ -77,7 +74,7 @@ def test_update() -> None:
         LsstErrorParams().update({}, {})
 
     # test passing fake parameters fails
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not a valid parameter"):
         LsstErrorParams().update(fake=True)
 
     # test that all of these give the same results
@@ -87,7 +84,7 @@ def test_update() -> None:
     params2.update(nVisYr={"u": 20}, m5={"r": 30})
 
     params3 = LsstErrorParams()
-    params3.update(dict(nVisYr={"u": 20}, m5={"r": 30}))
+    params3.update({"nVisYr": {"u": 20}, "m5": {"r": 30}})
 
     assert params1 == params2
     assert params1 == params3
@@ -107,26 +104,30 @@ def test_param_val_dict() -> None:
 
 
 @pytest.mark.parametrize(
-    "params,error",
+    ("params", "error", "match"),
     [
-        ({"nVisYr": "test"}, TypeError),
-        ({"nYrObs": {}}, TypeError),
-        ({"ndFlag": "test"}, TypeError),
-        ({"extendedType": "test"}, ValueError),
-        ({"nYrObs": -1}, ValueError),
-        ({"extendedType": "auto", "theta": {}}, ValueError),
-        ({"extendedType": "auto", "aMin": 3, "aMax": 2}, ValueError),
-        ({"renameDict": -1}, TypeError),
-        ({"input_type": "test"}, ValueError),
-        ({"output_type": "test"}, ValueError),
-        ({"asinh_b": -1.0}, ValueError),
+        ({"nVisYr": "test"}, TypeError, "should be of type"),
+        ({"nYrObs": {}}, TypeError, "should not be a dictionary"),
+        ({"ndFlag": "test"}, TypeError, "should be of type"),
+        ({"extendedType": "test"}, ValueError, "must be one of"),
+        ({"nYrObs": -1}, ValueError, "must be positive"),
+        ({"extendedType": "auto", "theta": {}}, ValueError, "no bands left"),
+        (
+            {"extendedType": "auto", "aMin": 3, "aMax": 2},
+            ValueError,
+            "aMin must be less",
+        ),
+        ({"renameDict": -1}, TypeError, "renameDict must be a dict"),
+        ({"inputType": "test"}, ValueError, "must be one of"),
+        ({"outputType": "test"}, ValueError, "must be one of"),
+        ({"asinhB": -1.0}, ValueError, "must be positive"),
     ],
 )
-def test_bad_params(params: dict, error: Exception) -> None:
+def test_bad_params(params: dict, error: type[Exception], match: str) -> None:
     """Test that instantiation and updating fails with bad parameters."""
-    with pytest.raises(error):  # type: ignore
+    with pytest.raises(error, match=match):
         LsstErrorParams(**params)
-    with pytest.raises(error):  # type: ignore
+    with pytest.raises(error, match=match):
         LsstErrorParams().update(**params)
 
 
@@ -139,15 +140,27 @@ def test_no_validation() -> None:
     LsstErrorParams(tvis="fake", validate=False)  # type: ignore
 
 
+def test_nYrObs_zero() -> None:
+    """Test that nYrObs=0 raises a ValueError."""
+    with pytest.raises(ValueError, match="nYrObs must be positive"):
+        LsstErrorParams(nYrObs=0)
+
+
 def test_missing_theta() -> None:
     """Test fail if we have extended error but don't have theta for everyone."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="extended error types"):
         LsstErrorParams(extendedType="auto", theta={"g": 0.1}, m5={"u": 23})
+
+
+def test_missing_airmass() -> None:
+    """Test fail if we have extended error but don't have airmass for everyone."""
+    with pytest.raises(ValueError, match="extended error types"):
+        LsstErrorParams(extendedType="auto", airmass={"g": 1.2}, m5={"u": 23})
 
 
 def test_all_dicts_are_floats() -> None:
     """Test that instantiation fails if all dictionaries are floats."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="At least one of the dictionary parameters"):
         LsstErrorParams(
             nVisYr=1,
             gamma=1,

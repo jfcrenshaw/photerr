@@ -9,19 +9,19 @@ import pytest
 
 from photerr import (
     ErrorModel,
-    EuclidWideErrorModel,
     EuclidDeepErrorModel,
+    EuclidWideErrorModel,
     LsstErrorModel,
     LsstErrorModelV1,
     LsstErrorParams,
-    RomanWideErrorModel,
-    RomanMediumErrorModel,
     RomanDeepErrorModel,
+    RomanMediumErrorModel,
     RomanUltraDeepErrorModel,
+    RomanWideErrorModel,
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def data() -> pd.DataFrame:
     """Return dummy data for error model tests.
 
@@ -39,7 +39,7 @@ def data() -> pd.DataFrame:
     return dataframe
 
 
-@pytest.fixture()
+@pytest.fixture
 def lsst_data() -> pd.DataFrame:
     """Return 1000 random LSST galaxies for error model tests."""
     rng = np.random.default_rng(0)
@@ -49,7 +49,7 @@ def lsst_data() -> pd.DataFrame:
         size=(10_000, 8),
     )
     array[:, -2:] = np.abs(array[:, -2:])
-    dataframe = pd.DataFrame(array, columns=list("ugrizy") + ["major", "minor"])
+    dataframe = pd.DataFrame(array, columns=[*list("ugrizy"), "major", "minor"])
     return dataframe
 
 
@@ -232,7 +232,7 @@ def test_decorrelate_doesnt_change_siglim(highSNR: bool, data: pd.DataFrame) -> 
 
 @pytest.mark.parametrize("decorrelate", [False, True])
 @pytest.mark.parametrize(
-    "sigLim,ndMode,absFlux",
+    ("sigLim", "ndMode", "absFlux"),
     [
         (5, "sigLim", False),
         (0, "flag", True),
@@ -309,13 +309,9 @@ def test_limitMags_aperture(extendedType: str) -> None:
 
 def test_limitingMags_scale() -> None:
     """Test that increasing the error scale decreases the limiting mags."""
-    magLimScale1 = LsstErrorModel(
-        scale={band: 1 for band in "ugrizy"}
-    ).getLimitingMags()
+    magLimScale1 = LsstErrorModel(scale=dict.fromkeys("ugrizy", 1)).getLimitingMags()
 
-    magLimScale2 = LsstErrorModel(
-        scale={band: 2 for band in "ugrizy"}
-    ).getLimitingMags()
+    magLimScale2 = LsstErrorModel(scale=dict.fromkeys("ugrizy", 2)).getLimitingMags()
 
     assert all(magLimScale1[band] > magLimScale2[band] for band in magLimScale1)
 
@@ -337,17 +333,16 @@ def test_errLoc(data: pd.DataFrame) -> None:
 
 def test_bad_instantiation() -> None:
     """Test some bad inputs to instantiation."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="at most one positional"):
         ErrorModel({}, {})  # type: ignore
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="must be an ErrorParams"):
         ErrorModel({})  # type: ignore
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Please provide either"):
         ErrorModel()
 
 
 def test_other_models(data: pd.DataFrame) -> None:
     """Test instantiating other models and calculating errors."""
-
     lsstData = LsstErrorModelV1()(data, 0)
     assert lsstData.shape == (data.shape[0], data.shape[1] + 1)
 
@@ -370,7 +365,7 @@ def test_other_models(data: pd.DataFrame) -> None:
     assert romanData.shape == (data.shape[0], data.shape[1] + 1)
 
 
-def test_rename_bands() -> None:
+def test_renameBands() -> None:
     """Test renaming the bands in the error model.
 
     This failure was noticed by Sam Schmidt.
@@ -482,26 +477,26 @@ def test_scale(highSNR: bool) -> None:
     assert np.allclose(ratio[0, :], 1)
 
     # and the grizy bands of the low SNR
-    np.allclose(ratio[1, 1:], 1)
+    assert np.allclose(ratio[1, 1:], 1)
 
     # but u band of low SNR is doubled
-    np.allclose(ratio[1, 0], 2)
+    assert np.allclose(ratio[1, 0], 2)
 
 
-def test_output_type_pogson_default(lsst_data: pd.DataFrame) -> None:
-    """Test that default output_type="pogson" gives the same result as before."""
+def test_outputType_pogson_default(lsst_data: pd.DataFrame) -> None:
+    """Test that default outputType="pogson" gives the same result as before."""
     m = LsstErrorModel()
-    m_explicit = LsstErrorModel(output_type="pogson")
+    m_explicit = LsstErrorModel(outputType="pogson")
     out1 = m(lsst_data, random_state=0)
     out2 = m_explicit(lsst_data, random_state=0)
     assert np.allclose(out1.to_numpy(), out2.to_numpy(), equal_nan=True)
 
 
-def test_output_type_maggy(lsst_data: pd.DataFrame) -> None:
-    """Test that output_type='maggy' is consistent with Pogson output."""
+def test_outputType_maggy(lsst_data: pd.DataFrame) -> None:
+    """Test that outputType='maggy' is consistent with Pogson output."""
     bands = list("ugrizy")
     pogson_out = LsstErrorModel()(lsst_data, random_state=0)
-    maggy_out = LsstErrorModel(output_type="maggy")(lsst_data, random_state=0)
+    maggy_out = LsstErrorModel(outputType="maggy")(lsst_data, random_state=0)
 
     # keep only rows that are finite in both outputs
     finite = np.isfinite(pogson_out[bands]).all(axis=1)
@@ -523,12 +518,39 @@ def test_output_type_maggy(lsst_data: pd.DataFrame) -> None:
     assert np.allclose(pogson_nsr, maggy_nsr, rtol=1e-5)
 
 
-def test_output_type_asinh(lsst_data: pd.DataFrame) -> None:
-    """Test that output_type='asinh' is consistent with Pogson output."""
+def test_outputType_maggy_highsnr(lsst_data: pd.DataFrame) -> None:
+    """Test outputType='maggy' with highSNR=True hits the flux fallback path.
+
+    With highSNR=True, obs_fluxes is None so _from_pogson derives flux from
+    Pogson mags (lines 191-192 of model.py) instead of using signed observed
+    fluxes.
+    Consistency check: -2.5*log10(maggy) should recover the Pogson output.
+    """
+    bands = list("ugrizy")
+    pogson_out = LsstErrorModel(highSNR=True)(lsst_data, random_state=0)
+    maggy_out = LsstErrorModel(highSNR=True, outputType="maggy")(
+        lsst_data, random_state=0
+    )
+
+    finite = np.isfinite(pogson_out[bands]).all(axis=1)
+    assert np.allclose(
+        -2.5 * np.log10(maggy_out[bands][finite].to_numpy()),
+        pogson_out[bands][finite].to_numpy(),
+        rtol=1e-5,
+    )
+
+    pogson_errs = pogson_out[[f"{b}_err" for b in bands]][finite].to_numpy()
+    maggy_vals = maggy_out[bands][finite].to_numpy()
+    maggy_errs = maggy_out[[f"{b}_err" for b in bands]][finite].to_numpy()
+    assert np.allclose(maggy_errs / maggy_vals, pogson_errs, rtol=1e-5)
+
+
+def test_outputType_asinh(lsst_data: pd.DataFrame) -> None:
+    """Test that outputType='asinh' is consistent with Pogson output."""
     bands = list("ugrizy")
     a = 2.5 / np.log(10)
 
-    m = LsstErrorModel(output_type="asinh")
+    m = LsstErrorModel(outputType="asinh")
     pogson_out = LsstErrorModel()(lsst_data, random_state=0)
     asinh_out = m(lsst_data, random_state=0)
 
@@ -546,8 +568,8 @@ def test_output_type_asinh(lsst_data: pd.DataFrame) -> None:
     assert np.allclose(pogson_from_asinh, pogson_finite, rtol=1e-5)
 
 
-def test_input_type_maggy(lsst_data: pd.DataFrame) -> None:
-    """Test that maggy -> pogson matches pogson -> pogson"""
+def test_inputType_maggy(lsst_data: pd.DataFrame) -> None:
+    """Test that maggy -> pogson matches pogson -> pogson."""
     # convert catalog to maggies
     bands = list("ugrizy")
     maggy_catalog = lsst_data.copy()
@@ -557,7 +579,7 @@ def test_input_type_maggy(lsst_data: pd.DataFrame) -> None:
     pogson_in = LsstErrorModel()(lsst_data, random_state=0)
 
     # estimate errors for maggies but return as pogson
-    maggy_in = LsstErrorModel(input_type="maggy", output_type="pogson")(
+    maggy_in = LsstErrorModel(inputType="maggy", outputType="pogson")(
         maggy_catalog, random_state=0
     )
 
@@ -569,12 +591,12 @@ def test_input_type_maggy(lsst_data: pd.DataFrame) -> None:
     )
 
 
-def test_input_type_asinh(lsst_data: pd.DataFrame) -> None:
+def test_inputType_asinh(lsst_data: pd.DataFrame) -> None:
     """Test that asinh -> pogson matches pogson -> pogson."""
     bands = list("ugrizy")
     a = 2.5 / np.log(10)
 
-    model = LsstErrorModel(input_type="asinh", output_type="pogson")
+    model = LsstErrorModel(inputType="asinh", outputType="pogson")
     b = np.array([model._b[band] for band in bands])
 
     # convert catalog to luptitudes
@@ -613,13 +635,13 @@ def test_negative_flux_preserved_for_maggy_asinh() -> None:
     assert np.any(~np.isfinite(pogson_out["g"])), "expected some non-finite Pogson mags"
 
     # With maggy output, all values should be finite (negative flux is valid)
-    maggy_out = LsstErrorModel(output_type="maggy", sigLim=0)(catalog, random_state=rng)
+    maggy_out = LsstErrorModel(outputType="maggy", sigLim=0)(catalog, random_state=rng)
     assert np.all(np.isfinite(maggy_out["g"])), "maggy output should be finite"
     assert np.all(np.isfinite(maggy_out["g_err"])), "maggy errors should be finite"
     assert np.any(maggy_out["g"] < 0), "some negative fluxes expected at mag=35"
 
     # With asinh output, all values should also be finite
-    asinh_out = LsstErrorModel(output_type="asinh", sigLim=0)(catalog, random_state=rng)
+    asinh_out = LsstErrorModel(outputType="asinh", sigLim=0)(catalog, random_state=rng)
     assert np.all(np.isfinite(asinh_out["g"])), "asinh output should be finite"
     assert np.all(np.isfinite(asinh_out["g_err"])), "asinh errors should be finite"
 
@@ -627,42 +649,60 @@ def test_negative_flux_preserved_for_maggy_asinh() -> None:
     # signed flux as maggy output (up to different random draws, so use same seed)
     rng2 = np.random.default_rng(7)
     catalog2 = pd.DataFrame({"g": np.full(500, 35.0)})
-    maggy_check = LsstErrorModel(output_type="maggy", sigLim=0)(
+    maggy_check = LsstErrorModel(outputType="maggy", sigLim=0)(
         catalog2, random_state=rng2
     )
     rng3 = np.random.default_rng(7)
-    asinh_check = LsstErrorModel(output_type="asinh", sigLim=0)(
+    asinh_check = LsstErrorModel(outputType="asinh", sigLim=0)(
         catalog2, random_state=rng3
     )
-    m = LsstErrorModel(output_type="asinh")
+    m = LsstErrorModel(outputType="asinh")
     b_g = m._b["g"]
     a = 2.5 / np.log(10)
     flux_from_lup = 2 * b_g * np.sinh(-asinh_check["g"].to_numpy() / a - np.log(b_g))
     assert np.allclose(flux_from_lup, maggy_check["g"].to_numpy(), rtol=1e-5)
 
 
-def test_asinh_b_override() -> None:
-    """Test that asinh_b can be overridden per-band or with a scalar."""
+def test_asinhB_override() -> None:
+    """Test that asinhB can be overridden per-band or with a scalar."""
     # scalar override: all bands get the same b
-    m_scalar = LsstErrorModel(output_type="asinh", asinh_b=1e-10)
+    m_scalar = LsstErrorModel(outputType="asinh", asinhB=1e-10)
     for band in "ugrizy":
         assert m_scalar._b[band] == 1e-10
 
     # dict override: only specified bands overridden
-    m_dict = LsstErrorModel(output_type="asinh", asinh_b={"g": 5e-11, "r": 2e-11})
+    m_dict = LsstErrorModel(outputType="asinh", asinhB={"g": 5e-11, "r": 2e-11})
     assert m_dict._b["g"] == 5e-11
     assert m_dict._b["r"] == 2e-11
     # other bands get auto-computed defaults
     assert m_dict._b["u"] != 5e-11
 
 
-def test_ndFlag_with_output_types(data: pd.DataFrame) -> None:
+def test_ndFlag_with_outputTypes(data: pd.DataFrame) -> None:
     """Test that non-detections are still flagged correctly for all output types."""
-    for output_type in ["pogson", "maggy", "asinh"]:
-        out = LsstErrorModel(output_type=output_type, sigLim=10)(data[["g"]], 0)
+    for outputType in ["pogson", "maggy", "asinh"]:
+        out = LsstErrorModel(outputType=outputType, sigLim=10)(data[["g"]], 0)
         # the super-low-SNR galaxy (mag=99) should be flagged in all output types
         assert out["g"].iloc[-1] == np.inf
         assert out["g_err"].iloc[-1] == np.inf
+
+
+def test_limitingMags_bad_nSigma() -> None:
+    """Test that nSigma <= 0 raises a ValueError."""
+    errModel = LsstErrorModel()
+    with pytest.raises(ValueError, match="nSigma must be positive"):
+        errModel.getLimitingMags(nSigma=0)
+    with pytest.raises(ValueError, match="nSigma must be positive"):
+        errModel.getLimitingMags(nSigma=-1)
+
+
+def test_extended_missing_columns(data: pd.DataFrame) -> None:
+    """Test that missing majorCol/minorCol raises a clear ValueError."""
+    bad_catalog = data[["g", "VIS"]]  # no major/minor columns
+    with pytest.raises(ValueError, match="not found in catalog"):
+        LsstErrorModel(extendedType="auto")(bad_catalog, 0)
+    with pytest.raises(ValueError, match="not found in catalog"):
+        LsstErrorModel(extendedType="gaap")(bad_catalog, 0)
 
 
 def test_limiting_mags() -> None:
@@ -672,6 +712,13 @@ def test_limiting_mags() -> None:
     m5 = errM.getLimitingMags(coadded=False)
 
     # compare to the Ivezic 2019 values
-    ivezic2019 = dict(u=23.78, g=24.81, r=24.35, i=23.92, z=23.34, y=22.45)
+    ivezic2019 = {
+        "u": 23.78,
+        "g": 24.81,
+        "r": 24.35,
+        "i": 23.92,
+        "z": 23.34,
+        "y": 22.45,
+    }
     for band in m5:
         assert np.isclose(m5[band], ivezic2019[band], rtol=1e-3)
