@@ -49,7 +49,7 @@ def lsst_data() -> pd.DataFrame:
         size=(10_000, 8),
     )
     array[:, -2:] = np.abs(array[:, -2:])
-    dataframe = pd.DataFrame(array, columns=list("ugrizy") + ["major", "minor"])
+    dataframe = pd.DataFrame(array, columns=[*list("ugrizy"), "major", "minor"])
     return dataframe
 
 
@@ -232,7 +232,7 @@ def test_decorrelate_doesnt_change_siglim(highSNR: bool, data: pd.DataFrame) -> 
 
 @pytest.mark.parametrize("decorrelate", [False, True])
 @pytest.mark.parametrize(
-    "sigLim,ndMode,absFlux",
+    ("sigLim", "ndMode", "absFlux"),
     [
         (5, "sigLim", False),
         (0, "flag", True),
@@ -309,13 +309,9 @@ def test_limitMags_aperture(extendedType: str) -> None:
 
 def test_limitingMags_scale() -> None:
     """Test that increasing the error scale decreases the limiting mags."""
-    magLimScale1 = LsstErrorModel(
-        scale=dict.fromkeys("ugrizy", 1)
-    ).getLimitingMags()
+    magLimScale1 = LsstErrorModel(scale=dict.fromkeys("ugrizy", 1)).getLimitingMags()
 
-    magLimScale2 = LsstErrorModel(
-        scale=dict.fromkeys("ugrizy", 2)
-    ).getLimitingMags()
+    magLimScale2 = LsstErrorModel(scale=dict.fromkeys("ugrizy", 2)).getLimitingMags()
 
     assert all(magLimScale1[band] > magLimScale2[band] for band in magLimScale1)
 
@@ -337,11 +333,11 @@ def test_errLoc(data: pd.DataFrame) -> None:
 
 def test_bad_instantiation() -> None:
     """Test some bad inputs to instantiation."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="only non-keyword argument"):
         ErrorModel({}, {})  # type: ignore
     with pytest.raises(TypeError):
         ErrorModel({})  # type: ignore
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Please provide either"):
         ErrorModel()
 
 
@@ -546,7 +542,7 @@ def test_output_type_asinh(lsst_data: pd.DataFrame) -> None:
 
 
 def test_input_type_maggy(lsst_data: pd.DataFrame) -> None:
-    """Test that maggy -> pogson matches pogson -> pogson"""
+    """Test that maggy -> pogson matches pogson -> pogson."""
     # convert catalog to maggies
     bands = list("ugrizy")
     maggy_catalog = lsst_data.copy()
@@ -671,6 +667,13 @@ def test_limiting_mags() -> None:
     m5 = errM.getLimitingMags(coadded=False)
 
     # compare to the Ivezic 2019 values
-    ivezic2019 = dict(u=23.78, g=24.81, r=24.35, i=23.92, z=23.34, y=22.45)
+    ivezic2019 = {
+        "u": 23.78,
+        "g": 24.81,
+        "r": 24.35,
+        "i": 23.92,
+        "z": 23.34,
+        "y": 22.45,
+    }
     for band in m5:
         assert np.isclose(m5[band], ivezic2019[band], rtol=1e-3)

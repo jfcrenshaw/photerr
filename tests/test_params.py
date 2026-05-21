@@ -32,7 +32,7 @@ def test_clean_dictionaries() -> None:
 
 def test_no_bands_left() -> None:
     """Test that dictionary params without sufficient overlap results in no bands."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="no bands left"):
         LsstErrorParams(nVisYr={"K": 10})
 
 
@@ -74,7 +74,7 @@ def test_update() -> None:
         LsstErrorParams().update({}, {})
 
     # test passing fake parameters fails
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not a valid parameter"):
         LsstErrorParams().update(fake=True)
 
     # test that all of these give the same results
@@ -84,7 +84,7 @@ def test_update() -> None:
     params2.update(nVisYr={"u": 20}, m5={"r": 30})
 
     params3 = LsstErrorParams()
-    params3.update(dict(nVisYr={"u": 20}, m5={"r": 30}))
+    params3.update({"nVisYr": {"u": 20}, "m5": {"r": 30}})
 
     assert params1 == params2
     assert params1 == params3
@@ -104,7 +104,7 @@ def test_param_val_dict() -> None:
 
 
 @pytest.mark.parametrize(
-    "params,error",
+    ("params", "error"),
     [
         ({"nVisYr": "test"}, TypeError),
         ({"nYrObs": {}}, TypeError),
@@ -138,13 +138,13 @@ def test_no_validation() -> None:
 
 def test_missing_theta() -> None:
     """Test fail if we have extended error but don't have theta for everyone."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="extended error types"):
         LsstErrorParams(extendedType="auto", theta={"g": 0.1}, m5={"u": 23})
 
 
 def test_all_dicts_are_floats() -> None:
     """Test that instantiation fails if all dictionaries are floats."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="At least one of the dictionary parameters"):
         LsstErrorParams(
             nVisYr=1,
             gamma=1,

@@ -406,9 +406,7 @@ class ErrorParams:
             if isinstance(param, dict):
                 # rename bands in-place
                 self.__dict__[key] = {
-                    (
-                        old_name if old_name not in renameDict else renameDict[old_name]
-                    ): val
+                    renameDict.get(old_name, old_name): val
                     for old_name, val in param.items()
                 }
 

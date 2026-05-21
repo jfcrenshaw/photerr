@@ -436,10 +436,7 @@ class ErrorModel:
             nsrRand = nsrRand / np.sqrt(A_ratio)
 
         # get the number of exposures
-        if coadded:
-            nStackedObs = nVisYr * self.params.nYrObs
-        else:
-            nStackedObs = 1  # type: ignore
+        nStackedObs = nVisYr * self.params.nYrObs if coadded else 1  # type: ignore
 
         # calculate the NSR for a single image
         nsrRandSingleExp = nsrRand * np.sqrt(nStackedObs)
@@ -547,10 +544,7 @@ class ErrorModel:
                 with np.errstate(invalid="ignore"):
                     obsFluxes = 10 ** (-obsMags / 2.5)
 
-        if self.params.highSNR:
-            obsMagErrs = nsr
-        else:
-            obsMagErrs = 2.5 * np.log10(1 + nsr)
+        obsMagErrs = nsr if self.params.highSNR else 2.5 * np.log10(1 + nsr)
 
         return obsMags, obsMagErrs, obsFluxes
 
@@ -700,6 +694,7 @@ class ErrorModel:
                     self._bands,
                     coadded,
                 ).flatten(),
+                strict=True,
             )
         )
 

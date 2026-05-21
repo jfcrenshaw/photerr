@@ -30,6 +30,10 @@ build-backend = "hatchling.build"
 [tool.ruff.lint]
 select = ["A", "B", "C4", "D", "E", "ERA", "F", "I", "PT", "RUF", "SIM", "T20", "TID", "UP", "W"]
 
+[tool.ruff.lint.per-file-ignores]
+"photerr/euclid.py" = ["A003"]
+"photerr/roman.py" = ["A003"]
+
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
