@@ -3,6 +3,7 @@
 [![build](https://github.com/jfcrenshaw/photerr/actions/workflows/main.yml/badge.svg)](https://github.com/jfcrenshaw/photerr/actions/workflows/main.yml)
 [![Codecov](https://img.shields.io/codecov/c/github/jfcrenshaw/photerr?label=codecov&logo=codecov)](https://app.codecov.io/gh/jfcrenshaw/photerr)
 [![PyPI](https://img.shields.io/pypi/v/photerr?color=blue&label=PyPI)](https://pypi.org/project/photerr/)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/photerr.svg)](https://anaconda.org/conda-forge/photerr)
 
 </div>
 
@@ -42,6 +43,12 @@ PhotErr is available on PyPI and can be installed with pip:
 
 ```bash
 pip install photerr
+```
+
+It can also be installed from conda forge:
+
+```bash
+conda install conda-forge::photerr
 ```
 
 Note that PhotErr requires Python >= 3.10.
