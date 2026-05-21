@@ -518,6 +518,33 @@ def test_output_type_maggy(lsst_data: pd.DataFrame) -> None:
     assert np.allclose(pogson_nsr, maggy_nsr, rtol=1e-5)
 
 
+def test_output_type_maggy_highsnr(lsst_data: pd.DataFrame) -> None:
+    """Test output_type='maggy' with highSNR=True hits the flux fallback path.
+
+    With highSNR=True, obs_fluxes is None so _from_pogson derives flux from
+    Pogson mags (lines 191-192 of model.py) instead of using signed observed
+    fluxes.
+    Consistency check: -2.5*log10(maggy) should recover the Pogson output.
+    """
+    bands = list("ugrizy")
+    pogson_out = LsstErrorModel(highSNR=True)(lsst_data, random_state=0)
+    maggy_out = LsstErrorModel(highSNR=True, output_type="maggy")(
+        lsst_data, random_state=0
+    )
+
+    finite = np.isfinite(pogson_out[bands]).all(axis=1)
+    assert np.allclose(
+        -2.5 * np.log10(maggy_out[bands][finite].to_numpy()),
+        pogson_out[bands][finite].to_numpy(),
+        rtol=1e-5,
+    )
+
+    pogson_errs = pogson_out[[f"{b}_err" for b in bands]][finite].to_numpy()
+    maggy_vals = maggy_out[bands][finite].to_numpy()
+    maggy_errs = maggy_out[[f"{b}_err" for b in bands]][finite].to_numpy()
+    assert np.allclose(maggy_errs / maggy_vals, pogson_errs, rtol=1e-5)
+
+
 def test_output_type_asinh(lsst_data: pd.DataFrame) -> None:
     """Test that output_type='asinh' is consistent with Pogson output."""
     bands = list("ugrizy")
