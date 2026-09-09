@@ -724,6 +724,9 @@ def test_limiting_mags() -> None:
         assert np.isclose(m5[band], ivezic2019[band], rtol=1e-3)
 
 
+# BELOW we test functionality for per-row depths
+# ----------------------------------------------
+
 _PER_ROW_BANDS = list("ugrizy")
 _PER_ROW_M5 = {band: 26.0 + 0.1 * i for i, band in enumerate(_PER_ROW_BANDS)}
 _PER_ROW_PARAMS = {

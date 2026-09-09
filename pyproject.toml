@@ -27,6 +27,9 @@ Homepage = "https://github.com/jfcrenshaw/photerr"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.ruff.format]
+exclude = ["*.md"]
+
 [tool.ruff.lint]
 select = ["A", "B", "C4", "D", "E", "ERA", "F", "I", "PT", "RUF", "SIM", "T20", "TID", "UP", "W"]
 

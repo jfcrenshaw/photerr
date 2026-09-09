@@ -116,7 +116,7 @@ This reads the $5\sigma$ depths for each object from the catalog columns `m5_u`,
 The template must contain `{band}`, which is replaced by each band name, but it is otherwise up to you, so `"{band}_depth"` and `"depth.{band}.m5"` work just as well.
 Bands with no matching column fall back to the single depth in `m5` (or to the depth calculated from `Cm`, `msky`, `theta`, and `km`), so you only need columns for the bands whose depth actually varies.
 If `m5Template` is set but no matching column is found at all, PhotErr raises an error rather than silently using its own depths.
-If you renamed the bands, the columns follow the new names (e.g. `m5_lsst_u`).
+If you renamed the bands (see below), the columns follow the new names (e.g. `m5_lsst_u`).
 
 These depths follow the same convention as `m5`: they are single-visit point-source limiting magnitudes, and are still boosted by $\sqrt{n_\text{VisYr} \, n_\text{YrObs}}$.
 To supply per-object *coadded* depths, set `nYrObs=1` and `nVisYr=1` as above.
@@ -215,7 +215,6 @@ The asinh magnitude formula requires a per-band softening parameter $b$ (in magg
 By default, $b$ is set to the coadded 1$\sigma$ limiting flux in each band, which places the softening at the survey noise floor — a natural and commonly used choice.
 You can override this per-band or globally with the `asinhB` parameter.
 Note that if your data is already in asinh magnitudes (i.e., you set `inputType="asinh"`) make sure you set `asinhB` equal to the values used in the creation of your catalog!
-
 
 **Negative fluxes and interaction with `sigLim` / `ndMode`**
 
