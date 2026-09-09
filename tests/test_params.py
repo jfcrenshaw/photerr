@@ -109,6 +109,8 @@ def test_param_val_dict() -> None:
         ({"nVisYr": "test"}, TypeError, "should be of type"),
         ({"nYrObs": {}}, TypeError, "should not be a dictionary"),
         ({"ndFlag": "test"}, TypeError, "should be of type"),
+        ({"m5Template": 5}, TypeError, "should be of type"),
+        ({"m5Template": {"u": "m5_u"}}, TypeError, "should not be a dictionary"),
         ({"extendedType": "test"}, ValueError, "must be one of"),
         ({"nYrObs": -1}, ValueError, "must be positive"),
         ({"extendedType": "auto", "theta": {}}, ValueError, "no bands left"),
@@ -179,3 +181,13 @@ def test_all_dicts_are_floats() -> None:
 def test_validate_params_with_numpy_float() -> None:
     """Test that numpy floats don't fail validation for primitive floats."""
     LsstErrorParams(m5={"u": np.array([23.0])[0]})
+
+
+def test_m5Template_defaults_to_none_and_accepts_str() -> None:
+    """Test that m5Template is off by default and is not broadcast to a dict."""
+    assert LsstErrorParams().m5Template is None
+
+    # it names a column pattern rather than a per-band value, so unlike the
+    # other m5 parameters it must stay a bare string
+    params = LsstErrorParams(m5Template="m5_{band}")
+    assert params.m5Template == "m5_{band}"
