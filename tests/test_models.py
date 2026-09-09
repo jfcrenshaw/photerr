@@ -722,3 +722,218 @@ def test_limiting_mags() -> None:
     }
     for band in m5:
         assert np.isclose(m5[band], ivezic2019[band], rtol=1e-3)
+
+
+# BELOW we test functionality for per-row depths
+# ----------------------------------------------
+
+_PER_ROW_BANDS = list("ugrizy")
+_PER_ROW_M5 = {band: 26.0 + 0.1 * i for i, band in enumerate(_PER_ROW_BANDS)}
+_PER_ROW_PARAMS = {
+    "nYrObs": 1,
+    "nVisYr": 1,
+    "gamma": 0.04,
+    "m5": _PER_ROW_M5,
+    "theta": dict.fromkeys(_PER_ROW_BANDS, 0.7),
+    "airmass": dict.fromkeys(_PER_ROW_BANDS, 1.2),
+}
+
+
+_M5_TEMPLATES = ["m5_{band}", "{band}_depth", "depth.{band}.m5"]
+
+
+@pytest.fixture
+def per_row_data() -> pd.DataFrame:
+    """Return galaxies plus a depth column per band, for every test template."""
+    rng = np.random.default_rng(0)
+    n = 500
+    frame = pd.DataFrame({band: rng.uniform(20, 27, n) for band in _PER_ROW_BANDS})
+    frame["major"] = rng.uniform(0.1, 1.0, n)
+    frame["minor"] = frame["major"] * rng.uniform(0.5, 1.0, n)
+    for band in _PER_ROW_BANDS:
+        depths = _PER_ROW_M5[band] + rng.normal(0, 0.25, n)
+        for template in _M5_TEMPLATES:
+            frame[template.format(band=band)] = depths
+    return frame
+
+
+@pytest.mark.parametrize("extendedType", ["point", "auto", "gaap"])
+@pytest.mark.parametrize("highSNR", [True, False])
+@pytest.mark.parametrize("ndMode", ["flag", "sigLim"])
+@pytest.mark.parametrize("template", _M5_TEMPLATES)
+def test_m5Template_matches_magnitude_offset(
+    extendedType: str,
+    highSNR: bool,
+    ndMode: str,
+    template: str,
+    per_row_data: pd.DataFrame,
+) -> None:
+    """Compare per-object depths against shifting the input magnitudes instead.
+
+    Because m5 enters the error model only through (mags - m5), giving an object
+    a depth of m5_row is exactly equivalent to leaving the depth at m5_ref and
+    brightening the input magnitude by (m5_ref - m5_row), then undoing that
+    shift on the output. That makes the shifted run an independent oracle.
+    """
+    extra = {
+        "extendedType": extendedType,
+        "highSNR": highSNR,
+        "ndMode": ndMode,
+        "sigLim": 1 if ndMode == "sigLim" else 0,
+    }
+
+    perRow = ErrorModel(**_PER_ROW_PARAMS, m5Template=template, **extra)(
+        per_row_data, 42
+    )
+
+    # shift the input mags by (m5_ref - m5_row) and run at a single depth
+    shifted = per_row_data.copy()
+    offsets = {
+        band: _PER_ROW_M5[band] - per_row_data[template.format(band=band)].to_numpy()
+        for band in _PER_ROW_BANDS
+    }
+    for band in _PER_ROW_BANDS:
+        shifted[band] = per_row_data[band].to_numpy() + offsets[band]
+    oracle = ErrorModel(**_PER_ROW_PARAMS, **extra)(shifted, 42)
+
+    for band in _PER_ROW_BANDS:
+        expected = oracle[band].to_numpy() - offsets[band]
+        actual = perRow[band].to_numpy()
+
+        # non-detections must land on the same objects
+        assert np.array_equal(np.isfinite(actual), np.isfinite(expected))
+
+        finite = np.isfinite(actual)
+        assert np.allclose(actual[finite], expected[finite])
+
+        # errors are invariant under the shift, so they match without undoing it
+        actualErr = perRow[f"{band}_err"].to_numpy()
+        expectedErr = oracle[f"{band}_err"].to_numpy()
+        finiteErr = np.isfinite(actualErr)
+        assert np.allclose(actualErr[finiteErr], expectedErr[finiteErr])
+
+
+def test_m5Template_deepens_and_shallows(per_row_data: pd.DataFrame) -> None:
+    """Test that per-object depths actually change the errors, in the right way."""
+    perRow = ErrorModel(**_PER_ROW_PARAMS, m5Template="m5_{band}")(per_row_data, 1)
+    flat = ErrorModel(**_PER_ROW_PARAMS)(per_row_data, 1)
+
+    # the two must differ, or m5Template is being silently ignored
+    assert not np.allclose(perRow["r_err"], flat["r_err"])
+
+    # at fixed magnitude, a deeper object must get a smaller error
+    n = 200
+    fixed = pd.DataFrame({band: np.full(n, 24.0) for band in _PER_ROW_BANDS})
+    for band in _PER_ROW_BANDS:
+        fixed[f"m5_{band}"] = _PER_ROW_M5[band]
+    fixed["m5_r"] = np.linspace(24.5, 27.0, n)
+    scan = ErrorModel(**_PER_ROW_PARAMS, m5Template="m5_{band}", decorrelate=False)(
+        fixed, 3
+    )
+    errs = scan["r_err"].to_numpy()
+    assert np.all(np.diff(errs) < 0)
+
+    # and a band without varying depth must be untouched by that scan
+    assert np.allclose(scan["u_err"], scan["u_err"].iloc[0])
+
+
+def test_m5Template_missing_columns(per_row_data: pd.DataFrame) -> None:
+    """Test that a prefix matching no column raises rather than falling back."""
+    with pytest.raises(ValueError, match="none of the expected depth"):
+        ErrorModel(**_PER_ROW_PARAMS, m5Template="nope_{band}")(per_row_data, 0)
+
+
+def test_m5Template_partial_coverage(per_row_data: pd.DataFrame) -> None:
+    """Test that bands without a depth column fall back to the model's depth."""
+    partial = per_row_data.drop(columns=[f"m5_{band}" for band in "ugizy"])
+    perRow = ErrorModel(**_PER_ROW_PARAMS, m5Template="m5_{band}")(partial, 7)
+    flat = ErrorModel(**_PER_ROW_PARAMS)(per_row_data, 7)
+
+    # r has a depth column, so it moves
+    assert not np.allclose(perRow["r_err"], flat["r_err"])
+
+    # the others do not, so they match the flat model exactly
+    for band in "ugizy":
+        assert np.allclose(perRow[f"{band}_err"], flat[f"{band}_err"], equal_nan=True)
+
+
+def test_m5Template_leaves_model_properties_alone(per_row_data: pd.DataFrame) -> None:
+    """Test that m5Template does not disturb getLimitingMags or the asinh softening.
+
+    Both describe the model rather than a catalog, so they must stay scalar and
+    keep using the model's own depths.
+    """
+    params = {**_PER_ROW_PARAMS, "sigmaSys": 0}
+    withPrefix = ErrorModel(**params, m5Template="m5_{band}", outputType="asinh")
+    without = ErrorModel(**params, outputType="asinh")
+
+    assert withPrefix.getLimitingMags() == without.getLimitingMags()
+    assert withPrefix._b == without._b
+
+    # single-visit limiting mags still round-trip to the m5 that was passed in
+    single = withPrefix.getLimitingMags(coadded=False)
+    for band, m5 in _PER_ROW_M5.items():
+        assert np.ndim(single[band]) == 0
+        assert np.isclose(single[band], m5)
+
+    # asinh output still runs, and still responds to the per-object depths
+    perRow = withPrefix(per_row_data, 1)
+    flat = without(per_row_data, 1)
+    assert not np.allclose(perRow["r"], flat["r"])
+
+
+def test_m5Template_orientation_when_nrows_equals_nbands() -> None:
+    """Test that a square catalog is not transposed into the band axis.
+
+    Stacking the depths along the leading axis instead of the trailing one is
+    undetectable except when the number of rows equals the number of bands, so
+    check that case directly.
+    """
+    n = len(_PER_ROW_BANDS)
+    square = pd.DataFrame({band: np.full(n, 24.0) for band in _PER_ROW_BANDS})
+    for band in _PER_ROW_BANDS:
+        square[f"m5_{band}"] = np.linspace(25.0, 27.0, n)
+    out = ErrorModel(**_PER_ROW_PARAMS, m5Template="m5_{band}", decorrelate=False)(
+        square, 1
+    )
+
+    # every band's depth increases down the rows, so every error must decrease
+    for band in _PER_ROW_BANDS:
+        assert np.all(np.diff(out[f"{band}_err"].to_numpy()) < 0)
+
+
+@pytest.mark.parametrize("template", ["{band}", "lsst_{band}"])
+def test_m5Template_rejects_band_collision(template: str) -> None:
+    """Test that a template resolving onto a band column is rejected.
+
+    A bare "{band}" template would read the magnitude column as the depth,
+    which is silently wrong rather than obviously wrong.
+    """
+    bands = ["u", "lsst_u"]
+    params = {
+        "nYrObs": 1,
+        "nVisYr": 1,
+        "gamma": 0.04,
+        "m5": dict.fromkeys(bands, 26.0),
+    }
+    with pytest.raises(ValueError, match="are themselves band columns"):
+        ErrorModel(**params, m5Template=template)
+
+
+@pytest.mark.parametrize(
+    "template", ["m5_all", "m5_{filter}", "m5_{band}_{extra}", "m5_{}"]
+)
+def test_m5Template_requires_band_field(template: str) -> None:
+    """Test that a template without exactly one {band} field is rejected.
+
+    Without it, every band would resolve to the same column, so every band
+    would silently share one depth.
+    """
+    with pytest.raises(ValueError, match=r"must contain '\{band\}'"):
+        ErrorModel(nYrObs=1, nVisYr=1, gamma=0.04, m5={"u": 26.0}, m5Template=template)
+
+
+def test_m5Template_rejects_malformed_format_string() -> None:
+    """Test that unbalanced braces give a format-string error, not a crash."""
+    with pytest.raises(ValueError, match="not a valid format string"):
+        ErrorModel(nYrObs=1, nVisYr=1, gamma=0.04, m5={"u": 26.0}, m5Template="m5_{ba")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import InitVar, dataclass, field
+from string import Formatter
 from typing import Any, Literal
 
 import numpy as np
@@ -27,6 +28,20 @@ param_docstring = """
         bands for which you pass a value in m5, this will be the 5-sigma
         limiting magnitude used, and any values for that band in Cm, msky,
         theta, and km will be ignored.
+    m5Template : str or None; default=None
+        If set, per-object 5-sigma limiting magnitudes are read from catalog
+        columns whose names follow this template. The template must contain
+        "{band}", which is replaced by each band name: "m5_{band}" reads m5_u,
+        m5_g, ..., while "{band}_depth" reads u_depth, g_depth, .... This lets
+        depth vary object-by-object, e.g. when objects are spread across a
+        survey footprint with a non-uniform depth map.
+        Bands without a matching column fall back to the single value in m5
+        (or the value calculated from Cm, msky, theta, km). These depths
+        follow the same convention as m5: they are single-visit depths, and
+        are still boosted by sqrt(nVisYr * nYrObs). To supply coadded depths,
+        set nVisYr=nYrObs=1. getLimitingMags and the asinh softening
+        parameters are unaffected, as both are properties of the model rather
+        than of a catalog.
     tvis : dict or float
         Exposure time in seconds for a single visit in each band.
     airmass : dict or float
@@ -195,6 +210,7 @@ _val_dict = {
     "nVisYr": (True, (int, float), (), False),
     "gamma": (True, (int, float), (), False),
     "m5": (True, (int, float), (), True),
+    "m5Template": (False, (str, type(None)), (), None),
     "tvis": (True, (int, float), (), False),
     "airmass": (True, (int, float, type(None)), (), False),
     "Cm": (True, (int, float), (), True),
@@ -235,6 +251,7 @@ class ErrorParams:
     gamma: dict[str, float] | float
 
     m5: dict[str, float] | float = field(default_factory=lambda: {})
+    m5Template: str | None = None
 
     tvis: dict[str, float] | float = field(default_factory=lambda: {})
     airmass: dict[str, float | None] | float | None = field(default_factory=lambda: {})
@@ -314,6 +331,55 @@ class ErrorParams:
             # make sure that aMin < aMax
             elif self.aMin > self.aMax:
                 raise ValueError("aMin must be less than aMax.")
+
+        # check the depth-column template resolves to one column per band
+        self._validate_m5_template()
+
+    def _validate_m5_template(self) -> None:
+        """Check that m5Template names one distinct, non-band column per band.
+
+        Raises
+        ------
+        ValueError
+            If the template's only replacement field is not "{band}", which
+            would otherwise point every band at the same column.
+            If a resolved column collides with a band name, which would read
+            magnitudes as depths.
+        """
+        if self.m5Template is None:
+            return
+
+        try:
+            fields = {
+                name
+                for _, name, _, _ in Formatter().parse(self.m5Template)
+                if name is not None
+            }
+        except ValueError as err:  # unbalanced braces
+            raise ValueError(
+                f"m5Template='{self.m5Template}' is not a valid format string: {err}"
+            ) from err
+
+        if fields != {"band"}:
+            raise ValueError(
+                f"m5Template='{self.m5Template}' must contain '{{band}}' and no "
+                "other replacement field, so that it names one column per band. "
+                "For example 'm5_{band}' or '{band}_depth'."
+            )
+
+        bands = set(self.nVisYr.keys())
+        collisions = sorted(
+            self.m5Template.format(band=band)
+            for band in bands
+            if self.m5Template.format(band=band) in bands
+        )
+        if collisions:
+            raise ValueError(
+                f"m5Template='{self.m5Template}' resolves depth columns "
+                f"{collisions}, which are themselves band columns. Choose a "
+                "template that does not collide with the band names, such as "
+                "'m5_{band}'."
+            )
 
     def _convert_to_dict(self) -> None:
         """For dict parameters that aren't dicts, convert to dicts.

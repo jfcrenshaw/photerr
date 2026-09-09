@@ -1,6 +1,6 @@
 [project]
 name = "photerr"
-version = "1.5.1"
+version = "1.6.0"
 description = "Photometric error model for astronomical imaging surveys"
 authors = [{name = "John Franklin Crenshaw", email = "jfcrenshaw@gmail.com"}]
 readme = "README.md"
@@ -26,6 +26,9 @@ Homepage = "https://github.com/jfcrenshaw/photerr"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.ruff.format]
+exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = ["A", "B", "C4", "D", "E", "ERA", "F", "I", "PT", "RUF", "SIM", "T20", "TID", "UP", "W"]

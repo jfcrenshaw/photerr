@@ -156,6 +156,76 @@ class ErrorModel:
             else:
                 self._b[band] = 10 ** (-m5_coadd[band] / 2.5) / 5
 
+    def _m5_stack(self, bands: list[str]) -> np.ndarray:
+        """Stack the model's single-visit 5-sigma depths for these bands.
+
+        Parameters
+        ----------
+        bands : list
+            The list of bands to stack, in order.
+
+        Returns
+        -------
+        np.ndarray
+            Depths with shape (len(bands),), which broadcasts against the
+            trailing axis of an (nrows, nbands) magnitude array.
+        """
+        return np.array([self._all_m5[band] for band in bands])
+
+    def _m5_from_catalog(
+        self, catalog: pd.DataFrame, bands: list[str]
+    ) -> np.ndarray | None:
+        """Read per-object 5-sigma depths from the catalog, if configured.
+
+        Bands without a matching column fall back to the model's own depth, so
+        the returned array always covers every band in `bands`.
+
+        Parameters
+        ----------
+        catalog : pd.DataFrame
+            The input catalog.
+        bands : list
+            The list of bands errors are being calculated for, in order.
+
+        Returns
+        -------
+        np.ndarray or None
+            Depths with shape (len(catalog), len(bands)), or None if
+            m5Template is not set, in which case the model's depths are used.
+
+        Raises
+        ------
+        ValueError
+            If m5Template is set but no matching column is present, which
+            otherwise silently falls back to the model's depths for every band.
+        """
+        template = self.params.m5Template
+        if template is None:
+            return None
+
+        # the template itself is validated when the parameters are built
+        wanted = {band: template.format(band=band) for band in bands}
+
+        found = {band for band, col in wanted.items() if col in catalog.columns}
+        if not found:
+            raise ValueError(
+                f"m5Template='{template}' is set, but none of the expected depth "
+                f"columns {sorted(wanted.values())} are in the catalog. Either "
+                "add them, correct the template, or set m5Template=None to use "
+                "the model's own depths."
+            )
+
+        nrows = len(catalog)
+        columns = [
+            (
+                catalog[wanted[band]].to_numpy(dtype=float)
+                if band in found
+                else np.full(nrows, self._all_m5[band], dtype=float)
+            )
+            for band in bands
+        ]
+        return np.stack(columns, axis=-1)
+
     def _get_psf_sig(self, bands: list[str]) -> np.ndarray:
         """Return the per-band PSF Gaussian sigma in arcseconds.
 
@@ -346,6 +416,7 @@ class ErrorModel:
         majors: np.ndarray | None,
         minors: np.ndarray | None,
         bands: list[str],
+        m5: np.ndarray | None = None,
     ) -> np.ndarray:
         """Calculate the noise-to-signal ratio.
 
@@ -362,6 +433,9 @@ class ErrorModel:
             The semi-minor axes of the galaxies in arcseconds
         bands : list[str]
             The list of bands the galaxy is observed in
+        m5 : np.ndarray or None
+            Per-object 5-sigma depths with shape (nrows, nbands). If None,
+            the model's own per-band depths are used.
 
         Returns
         -------
@@ -369,7 +443,8 @@ class ErrorModel:
             The noise-to-signal ratio of each galaxy
         """
         # get the 5-sigma limiting magnitudes for these bands
-        m5 = np.array([self._all_m5[band] for band in bands])
+        if m5 is None:
+            m5 = self._m5_stack(bands)
         gamma = np.array([self.params.gamma[band] for band in bands])
         nVisYr = np.array([self.params.nVisYr[band] for band in bands])
         scale = np.array([self.params.scale[band] for band in bands])
@@ -417,6 +492,7 @@ class ErrorModel:
         minors: np.ndarray | None,
         bands: list[str],
         coadded: bool = True,
+        m5: np.ndarray | None = None,
     ) -> np.ndarray:
         """Calculate magnitudes that correspond to the given NSRs.
 
@@ -434,13 +510,17 @@ class ErrorModel:
             The list of bands the galaxy is observed in
         coadded : bool; default=True
             If True, assumes NSR is after coaddition.
+        m5 : np.ndarray or None
+            Per-object 5-sigma depths with shape (nrows, nbands). If None,
+            the model's own per-band depths are used.
 
         Returns
         -------
         np.ndarray
             The magnitude corresponding to the NSR for each galaxy
         """
-        m5 = np.array([self._all_m5[band] for band in bands])
+        if m5 is None:
+            m5 = self._m5_stack(bands)
         gamma = np.array([self.params.gamma[band] for band in bands])
         nVisYr = np.array([self.params.nVisYr[band] for band in bands])
         scale = np.array([self.params.scale[band] for band in bands])
@@ -496,6 +576,7 @@ class ErrorModel:
         minors: np.ndarray | None,
         bands: list[str],
         rng: np.random.Generator,
+        m5: np.ndarray | None = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
         """Calculate observed magnitudes and photometric errors.
 
@@ -514,6 +595,9 @@ class ErrorModel:
             The list of bands the galaxy is observed in
         rng : np.random.Generator
             A numpy random number generator
+        m5 : np.ndarray or None
+            Per-object 5-sigma depths with shape (nrows, nbands). If None,
+            the model's own per-band depths are used.
 
         Returns
         -------
@@ -525,7 +609,7 @@ class ErrorModel:
             outputType is "maggy" or "asinh".
         """
         # get the NSR for all galaxies
-        nsr = self._get_nsr_from_mags(mags, majors, minors, bands)
+        nsr = self._get_nsr_from_mags(mags, majors, minors, bands, m5)
 
         obsFluxes: np.ndarray | None = None
 
@@ -558,9 +642,11 @@ class ErrorModel:
                 with np.errstate(divide="ignore", invalid="ignore"):
                     abs_flux_mags = -2.5 * np.log10(np.abs(obsFluxes))
                 mags_for_decorr = np.where(np.isfinite(obsMags), obsMags, abs_flux_mags)
-                nsr = self._get_nsr_from_mags(mags_for_decorr, majors, minors, bands)
+                nsr = self._get_nsr_from_mags(
+                    mags_for_decorr, majors, minors, bands, m5
+                )
             else:
-                nsr = self._get_nsr_from_mags(obsMags, majors, minors, bands)
+                nsr = self._get_nsr_from_mags(obsMags, majors, minors, bands, m5)
 
         # if ndMode == sigLim, then clip at the n-sigma limit
         if self.params.ndMode == "sigLim":
@@ -569,7 +655,7 @@ class ErrorModel:
                 nsrLim = np.divide(1, self.params.sigLim)
 
             # calculate limiting magnitudes for each galaxy
-            magLim = self._get_mags_from_nsr(nsrLim, majors, minors, bands)
+            magLim = self._get_mags_from_nsr(nsrLim, majors, minors, bands, m5=m5)
 
             # clip mags and nsr's at this limit
             nsr = np.clip(nsr, 0, nsrLim)
@@ -609,7 +695,9 @@ class ErrorModel:
         catalog : pd.DataFrame
             The input catalog in a pandas DataFrame. Band columns must be in
             the format specified by inputType. Non-band columns (redshift,
-            half-light radii, etc.) are passed through unchanged.
+            half-light radii, etc.) are passed through unchanged. If
+            m5Template is set, per-object 5-sigma depths are also read from the
+            columns it names, and are passed through unchanged as well.
         random_state : np.random.Generator, int, or None
             The random state. Can either be a numpy random generator
             (e.g. np.random.default_rng(42)), an integer (which is used
@@ -647,10 +735,13 @@ class ErrorModel:
             majors = None
             minors = None
 
+        # get per-object depths, if the catalog carries them
+        m5 = self._m5_from_catalog(catalog, bands)
+
         # get observed magnitudes and errors (always in Pogson space);
         # obs_fluxes are the signed observed fluxes (None for highSNR mode)
         obsMags, obsMagErrs, obs_fluxes = self._get_obs_and_errs(
-            mags, majors, minors, bands, rng
+            mags, majors, minors, bands, rng, m5
         )
 
         # identify non-detections in Pogson space before output conversion.
